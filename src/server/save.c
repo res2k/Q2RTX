@@ -444,7 +444,7 @@ static int read_level_file(void)
 
 int SV_NoSaveGames(void)
 {
-	if (dedicated->integer && !Cvar_VariableInteger("coop"))
+	if (!COM_SINGLE_PLAYER_FEATURES && !Cvar_VariableInteger("coop"))
         return 1;
 
     if (sv_force_enhanced_savegames->integer && !(g_features->integer & GMF_ENHANCED_SAVEGAMES))
@@ -575,7 +575,7 @@ static void SV_Loadgame_f(void)
         return;
     }
 
-    if (dedicated->integer) {
+    if (!COM_SINGLE_PLAYER_FEATURES) {
         Com_Printf("Savegames are for listen servers only.\n");
         return;
     }
@@ -621,7 +621,7 @@ static void SV_Savegame_f(void)
         return;
     }
 
-    if (dedicated->integer) {
+    if (!COM_SINGLE_PLAYER_FEATURES) {
         Com_Printf("Savegames are for listen servers only.\n");
         return;
     }

@@ -1357,6 +1357,8 @@ int SV_CountClients(void)
     return count;
 }
 
+//============================================================================
+
 static int ping_nop(client_t *cl)
 {
     return 0;
@@ -2262,6 +2264,15 @@ void SV_Init(void)
     map_override_path = Cvar_Get("map_override_path", "", 0);
 
     init_rate_limits();
+
+#if SERVER_IS_COMPAT
+    // Only listen locally
+    // TODO: Choose based on game type...
+    Cvar_Get("net_ip", "", CVAR_ROM);
+    Cvar_Set("net_ip", "127.0.0.1");
+    Cvar_Get("net_ip6", "", CVAR_ROM);
+    Cvar_Set("net_ip6", "::1");
+#endif
 
 #if USE_FPS
     // set up default frametime for main loop

@@ -115,6 +115,17 @@ void        Com_AddConfigFile(const char *name, unsigned flags);
 #define COM_DEDICATED   1
 #endif
 
+// Compatibility server build
+#if !defined(SERVER_IS_COMPAT)
+#define SERVER_IS_COMPAT 0
+#endif
+// Single player features: available when not a dedicated server, or a compatibility server
+#if SERVER_IS_COMPAT
+#define COM_SINGLE_PLAYER_FEATURES   1
+#else
+#define COM_SINGLE_PLAYER_FEATURES   !COM_DEDICATED
+#endif
+
 #ifdef _DEBUG
 #define Com_DPrintf(...) \
     if (developer && developer->integer > 0) \

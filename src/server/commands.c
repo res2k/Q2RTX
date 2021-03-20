@@ -284,7 +284,7 @@ static void SV_Map(bool restart)
 	// we need to defer the call to SV_AutoSaveEnd until the client has connected and 
 	// initialized their edict. That happens in SV_Begin_f (user.c).
 	// Only do this in local single player mode for safety.
-	if (sv_maxclients->integer == 1 && !dedicated->integer && !SV_NoSaveGames())
+	if (sv_maxclients->integer == 1 && COM_SINGLE_PLAYER_FEATURES && !SV_NoSaveGames())
 	{
 		sv_pending_autosave = true;
 	}
