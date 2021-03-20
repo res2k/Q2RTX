@@ -92,6 +92,10 @@ cvar_t  *sv_recycle;
 #endif
 cvar_t  *sv_enhanced_setplayer;
 
+#if !USE_CLIENT
+cvar_t *sv_external_server;
+#endif
+
 cvar_t  *sv_iplimit;
 cvar_t  *sv_status_limit;
 cvar_t  *sv_status_show;
@@ -1357,6 +1361,21 @@ int SV_CountClients(void)
     return count;
 }
 
+//============================================================================
+
+// Returns whether we're a server for a local single player game
+bool SV_IsLocalSinglePlayer(void)
+{
+    if (sv_maxclients->integer == 1 && !dedicated->integer)
+        return true;
+#if !USE_CLIENT
+    return sv_external_server->integer;
+#endif
+    return false;
+}
+
+//============================================================================
+
 static int ping_nop(client_t *cl)
 {
     return 0;
@@ -2228,6 +2247,8 @@ void SV_Init(void)
 
 #if !USE_CLIENT
     sv_recycle = Cvar_Get("sv_recycle", "0", 0);
+    sv_external_server = Cvar_Get("sv_external_server", "0", 0);
+    sv_external_server->flags |= CVAR_ROM;
 #endif
 
     sv_enhanced_setplayer = Cvar_Get("sv_enhanced_setplayer", "0", 0);
@@ -2262,6 +2283,17 @@ void SV_Init(void)
     map_override_path = Cvar_Get("map_override_path", "", 0);
 
     init_rate_limits();
+
+#if !USE_CLIENT
+    if(sv_external_server->integer)
+    {
+        // Only listen locally
+        Cvar_Get("net_ip", "", CVAR_ROM);
+        Cvar_Set("net_ip", "127.0.0.1");
+        Cvar_Get("net_ip6", "", CVAR_ROM);
+        Cvar_Set("net_ip6", "::1");
+    }
+#endif
 
 #if USE_FPS
     // set up default frametime for main loop

@@ -522,6 +522,10 @@ extern cvar_t       *sv_fps;
 extern cvar_t       *sv_force_reconnect;
 extern cvar_t       *sv_iplimit;
 
+#if !USE_CLIENT
+extern cvar_t       *sv_external_server;
+#endif
+
 #ifdef _DEBUG
 extern cvar_t       *sv_debug;
 extern cvar_t       *sv_pad_packets;
@@ -583,6 +587,8 @@ void SV_RateInit(ratelimit_t *r, const char *s);
 addrmatch_t *SV_MatchAddress(list_t *list, netadr_t *address);
 
 int SV_CountClients(void);
+
+bool SV_IsLocalSinglePlayer(void);
 
 #if USE_ZLIB
 voidpf SV_zalloc(voidpf opaque, uInt items, uInt size);

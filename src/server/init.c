@@ -389,7 +389,7 @@ void SV_InitGame(unsigned mvd_spawn)
 
         // dedicated servers can't be single player and are usually DM
         // so unless they explicity set coop, force it to deathmatch
-        if (COM_DEDICATED) {
+        if (COM_DEDICATED && !SV_IsLocalSinglePlayer()) {
             if (!Cvar_VariableInteger("coop"))
                 Cvar_Set("deathmatch", "1");
         }
