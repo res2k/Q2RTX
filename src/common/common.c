@@ -1026,7 +1026,13 @@ void Qcommon_Init(int argc, char **argv)
     // add + commands from command line
     if (!Com_AddLateCommands()) {
         // if the user didn't give any commands, run default action
-        char *cmd = COM_DEDICATED ? "dedicated_start" : "client_start";
+        char *cmd;
+        if(COM_EXTERNAL_SERVER)
+            cmd = "external_server_start";
+        else if(COM_DEDICATED)
+            cmd = "dedicated_start";
+        else
+            cmd = "client_start";
 
         if ((cmd = Cmd_AliasCommand(cmd)) != NULL) {
             Cbuf_AddText(&cmd_buffer, cmd);
