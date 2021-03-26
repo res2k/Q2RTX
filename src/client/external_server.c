@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "common/zone.h"
+#include "client/client.h"
 #include "server/server.h"
 
 #undef SV_ErrorEvent
@@ -49,6 +50,10 @@ struct external_server_s
     HANDLE in_pipe;
     // Pipe for output of external process (read from it)
     HANDLE out_pipe;
+
+    char *input_buffer;
+    size_t input_buffer_pos;
+    size_t input_buffer_size;
 } external_server;
 
 extern cvar_t *fs_game;
@@ -198,6 +203,11 @@ static bool start_external_server(const char* game_str)
     external_server.in_pipe = input_pipe[1];
     external_server.out_pipe = output_pipe[0];
     external_server.active = true;
+
+    external_server.input_buffer_size = 1024;
+    external_server.input_buffer = Z_Malloc(external_server.input_buffer_size);
+    external_server.input_buffer_pos = 0;
+
     result = true;
 
 fail3:
@@ -246,7 +256,59 @@ static void end_external_server(void)
     CloseHandle(external_server.in_pipe);
     CloseHandle(external_server.out_pipe);
 
+    Z_Free(external_server.input_buffer);
+
     memset(&external_server, 0, sizeof(external_server));
+}
+
+static char* strnchr(char* str, size_t n, int c)
+{
+    while(n-- > 0) {
+        if (*str == c)
+            return str;
+        ++str;
+    }
+    return NULL;
+}
+
+static void forward_external_server_output(void)
+{
+    DWORD bytes_avail = 0;
+    if(!PeekNamedPipe(external_server.out_pipe, NULL, 0, NULL, &bytes_avail, 0) || (bytes_avail == 0))
+        return;
+
+    size_t buf_remaining = external_server.input_buffer_size - external_server.input_buffer_pos;
+    if (bytes_avail > buf_remaining)
+    {
+        size_t new_size = external_server.input_buffer_pos + bytes_avail;
+        external_server.input_buffer = Z_Realloc(external_server.input_buffer, new_size);
+        external_server.input_buffer_size = new_size;
+        buf_remaining = external_server.input_buffer_size - external_server.input_buffer_pos;
+    }
+    DWORD bytes_read = 0;
+    if(!ReadFile(external_server.out_pipe, external_server.input_buffer + external_server.input_buffer_pos, bytes_avail, &bytes_read, NULL))
+        return;
+    external_server.input_buffer_pos += bytes_read;
+
+    // Line-wise output to console
+    char *buf_pos = external_server.input_buffer;
+    size_t scan_size = external_server.input_buffer_pos;
+    char *linesep = strnchr(buf_pos, scan_size, '\n');
+    while(linesep != NULL) {
+        // Need to null-terminate...
+        *linesep = 0;
+        Con_Printf("%s\n", buf_pos);
+        size_t line_len = linesep - buf_pos + 1;
+        buf_pos += line_len;
+        scan_size -= line_len;
+        linesep = strnchr(buf_pos, scan_size, '\n');
+    }
+    // Remove printed lines from buffer
+    if(buf_pos > external_server.input_buffer) {
+        size_t remainder = (external_server.input_buffer + external_server.input_buffer_pos) - buf_pos;
+        memmove(external_server.input_buffer, buf_pos, remainder);
+        external_server.input_buffer_pos = remainder;
+    }
 }
 
 static bool game_library_exists(const char* game, const char* prefix, const char* cpu_str)
@@ -333,7 +395,7 @@ unsigned SV_Frame_InClient(unsigned msec)
     if(!external_server.active)
         return SV_Frame(msec);
 
-    // TODO: Fetch output from external_server.out_pipe
+    forward_external_server_output();
 
     return msec; // force CL_Frame() result to have precedence
 #endif
