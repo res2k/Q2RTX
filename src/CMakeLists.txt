@@ -85,6 +85,7 @@ SET(SRC_CLIENT
 	client/ascii.c
 	client/console.c
 	client/cin.c
+	client/compat_server.c
 	client/crc.c
 	client/demo.c
 	client/download.c

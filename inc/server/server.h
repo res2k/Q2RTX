@@ -21,6 +21,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "common/net/net.h"
 
+#if USE_CLIENT && !defined(IN_SERVER)
+#define SV_ErrorEvent       SV_ErrorEvent_InClient
+#define SV_Init             SV_Init_InClient
+#define SV_Shutdown         SV_Shutdown_InClient
+#define SV_Frame            SV_Frame_InClient
+// SV_SetConsoleTitle doesn't really matter
+// MVD_GetDemoPercent not sure
+// SV_GetSaveInfo should be fine, only reads savefile header
+#endif
+
 typedef enum {
     ss_dead,            // no map loaded
     ss_loading,         // spawning level edicts

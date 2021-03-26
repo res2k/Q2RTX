@@ -36,6 +36,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/protocol.h"
 #include "common/zone.h"
 
+#define IN_SERVER
 #include "client/client.h"
 #include "server/server.h"
 #include "system/system.h"
