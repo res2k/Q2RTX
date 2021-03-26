@@ -229,21 +229,36 @@ fail:
     return result;
 }
 
+static void send_server_command(const char* cmd)
+{
+    if (!external_server.active)
+        return;
+
+    char *command = Q_asprintf("%s\n", cmd);
+    DWORD bytes_written;
+    if(!WriteFile(external_server.in_pipe, command, strlen(command), &bytes_written, NULL)
+        || (bytes_written != strlen(command))) {
+        print_last_error("WriteFile()");
+    }
+    Z_Free(command);
+}
+
 static void end_external_server(void)
 {
     if (!external_server.active)
         return;
 
-    const char quit_command[] = "quit\n";
-    DWORD bytes_written;
-    if(!WriteFile(external_server.in_pipe, quit_command, strlen(quit_command), &bytes_written, NULL)
-        || (bytes_written != strlen(quit_command))) {
-        print_last_error("WriteFile()");
-    }
+    send_server_command("quit");
+
 #if !defined(_DEBUG)
     DWORD timeout = 5000;
     if (WaitForSingleObject(external_server.process_handle, timeout) != WAIT_OBJECT_0) {
         TerminateProcess(external_server.process_handle, ERROR_TIMEOUT);
+    }
+#else
+    DWORD timeout = 30000;
+    if (WaitForSingleObject(external_server.process_handle, timeout) != WAIT_OBJECT_0) {
+        Com_WPrintf("external server did not quit after %u ms\n", timeout);
     }
 #endif
     DWORD exit_code;
