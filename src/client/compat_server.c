@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/shared.h"
 #include "common/cvar.h"
 #include "common/zone.h"
+#include "client/client.h"
 #include "server/server.h"
 
 #undef SV_ErrorEvent
@@ -50,6 +51,10 @@ struct compat_server_process_s
     HANDLE in_pipe;
     // Pipe for output of external process (read from it)
     HANDLE out_pipe;
+
+    char *input_buffer;
+    size_t input_buffer_pos;
+    size_t input_buffer_size;
 } compat_server_process;
 
 #if defined(_DEBUG)
@@ -249,6 +254,11 @@ static bool start_compat_server_process(const char* game_str)
     compat_server_process.in_pipe = input_pipe[1];
     compat_server_process.out_pipe = output_pipe[0];
     compat_server_process.active = true;
+
+    compat_server_process.input_buffer_size = 1024;
+    compat_server_process.input_buffer = Z_Malloc(compat_server_process.input_buffer_size);
+    compat_server_process.input_buffer_pos = 0;
+
     result = true;
 
 fail3:
@@ -299,7 +309,60 @@ static void end_compat_server_process(void)
     CloseHandle(compat_server_process.in_pipe);
     CloseHandle(compat_server_process.out_pipe);
 
+    Z_Free(compat_server_process.input_buffer);
+
     memset(&compat_server_process, 0, sizeof(compat_server_process));
+}
+
+static char* strnchr(char* str, size_t n, int c)
+{
+    while(n-- > 0) {
+        if (*str == c)
+            return str;
+        ++str;
+    }
+    return NULL;
+}
+
+// Grab output from the compatibility server process, print to console
+static void forward_compat_server_process_output(void)
+{
+    DWORD bytes_avail = 0;
+    if(!PeekNamedPipe(compat_server_process.out_pipe, NULL, 0, NULL, &bytes_avail, 0) || (bytes_avail == 0))
+        return;
+
+    size_t buf_remaining = compat_server_process.input_buffer_size - compat_server_process.input_buffer_pos;
+    if (bytes_avail > buf_remaining)
+    {
+        size_t new_size = compat_server_process.input_buffer_pos + bytes_avail;
+        compat_server_process.input_buffer = Z_Realloc(compat_server_process.input_buffer, new_size);
+        compat_server_process.input_buffer_size = new_size;
+        buf_remaining = compat_server_process.input_buffer_size - compat_server_process.input_buffer_pos;
+    }
+    DWORD bytes_read = 0;
+    if(!ReadFile(compat_server_process.out_pipe, compat_server_process.input_buffer + compat_server_process.input_buffer_pos, bytes_avail, &bytes_read, NULL))
+        return;
+    compat_server_process.input_buffer_pos += bytes_read;
+
+    // Line-wise output to console
+    char *buf_pos = compat_server_process.input_buffer;
+    size_t scan_size = compat_server_process.input_buffer_pos;
+    char *linesep = strnchr(buf_pos, scan_size, '\n');
+    while(linesep != NULL) {
+        // Need to null-terminate...
+        *linesep = 0;
+        Con_Printf("%s\n", buf_pos);
+        size_t line_len = linesep - buf_pos + 1;
+        buf_pos += line_len;
+        scan_size -= line_len;
+        linesep = strnchr(buf_pos, scan_size, '\n');
+    }
+    // Remove printed lines from buffer
+    if(buf_pos > compat_server_process.input_buffer) {
+        size_t remainder = (compat_server_process.input_buffer + compat_server_process.input_buffer_pos) - buf_pos;
+        memmove(compat_server_process.input_buffer, buf_pos, remainder);
+        compat_server_process.input_buffer_pos = remainder;
+    }
 }
 
 // Check whether a specific game library exists
@@ -388,7 +451,7 @@ unsigned SV_Frame_InClient(unsigned msec)
     if(!compat_server_process.active)
         return SV_Frame(msec);
 
-    // TODO: Fetch output from compat_server_process.out_pipe
+    forward_compat_server_process_output();
 
     return msec; // force CL_Frame() result to have precedence
 #endif
