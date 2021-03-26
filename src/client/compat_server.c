@@ -475,3 +475,12 @@ unsigned SV_Frame_InClient(unsigned msec)
     return msec; // force CL_Frame() result to have precedence
 #endif
 }
+
+bool CL_ForwardToCompatServer(void)
+{
+    if(!compat_server_process.active)
+        return false;
+
+    send_server_command(Cmd_RawArgsFrom(0));
+    return true;
+}

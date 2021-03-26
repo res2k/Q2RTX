@@ -79,6 +79,7 @@ bool CL_ForwardToServer(void);
 // adds the current command line as a clc_stringcmd to the client message.
 // things like godmode, noclip, etc, are commands directed to the server,
 // so when they are typed in at the console, they will need to be forwarded.
+bool CL_ForwardToCompatServer(void);
 
 void Con_Init(void);
 void Con_SetColor(color_index_t color);
