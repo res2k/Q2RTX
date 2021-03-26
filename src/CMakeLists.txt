@@ -97,6 +97,7 @@ SET(SRC_CLIENT
 	client/download.c
 	client/effects.c
 	client/entities.c
+	client/external_server.c
 	client/gtv.c
 	client/input.c
 	client/keys.c
