@@ -415,3 +415,12 @@ unsigned SV_Frame_InClient(unsigned msec)
     return msec; // force CL_Frame() result to have precedence
 #endif
 }
+
+bool CL_ForwardToExternalServer(void)
+{
+    if(!external_server.active)
+        return false;
+
+    send_server_command(Cmd_RawArgsFrom(0));
+    return true;
+}

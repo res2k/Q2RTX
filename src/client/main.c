@@ -320,6 +320,10 @@ so when they are typed in at the console, they will need to be forwarded.
 */
 bool CL_ForwardToServer(void)
 {
+    if (cls.state < ca_connected) {
+        return CL_ForwardToExternalServer();
+    }
+
     char    *cmd;
 
     cmd = Cmd_Argv(0);
