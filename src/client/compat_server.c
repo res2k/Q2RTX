@@ -281,22 +281,41 @@ fail:
     return result;
 }
 
+// Send a command string to the compatibility server
+static void send_server_command(const char* cmd)
+{
+    if (!compat_server_process.active)
+        return;
+
+    char *command = _alloca(strlen(cmd) + 2);
+    strcpy(command, cmd);
+    strcat(command, "\n");
+    DWORD bytes_written;
+    if(!WriteFile(compat_server_process.in_pipe, command, strlen(command), &bytes_written, NULL)
+        || (bytes_written != strlen(command))) {
+        print_last_error("WriteFile()");
+    }
+}
+
 // Instruct the compatibility server process to end itself
 static void end_compat_server_process(void)
 {
     if (!compat_server_process.active)
         return;
 
-    const char quit_command[] = "quit\n";
-    DWORD bytes_written;
-    if(!WriteFile(compat_server_process.in_pipe, quit_command, strlen(quit_command), &bytes_written, NULL)
-        || (bytes_written != strlen(quit_command))) {
-        print_last_error("WriteFile()");
-    }
+    send_server_command("quit");
+
 #if !defined(_DEBUG)
+    // Terminate process if compat server doesn't react
     DWORD timeout = 5000;
     if (WaitForSingleObject(compat_server_process.process_handle, timeout) != WAIT_OBJECT_0) {
         TerminateProcess(compat_server_process.process_handle, ERROR_TIMEOUT);
+    }
+#else
+    // Debug mode: Wait longer and don't terminate. Helpful if a debugger was attached
+    DWORD timeout = 30000;
+    if (WaitForSingleObject(compat_server_process.process_handle, timeout) != WAIT_OBJECT_0) {
+        Com_WPrintf("external server did not quit after %u ms\n", timeout);
     }
 #endif
     DWORD exit_code;
