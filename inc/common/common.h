@@ -110,9 +110,11 @@ void        Com_FlushLogs(void);
 void        Com_AddConfigFile(const char *name, unsigned flags);
 
 #if USE_CLIENT
-#define COM_DEDICATED   (dedicated->integer != 0)
+#define COM_DEDICATED           (dedicated->integer != 0)
+#define COM_EXTERNAL_SERVER     0
 #else
-#define COM_DEDICATED   1
+#define COM_DEDICATED           1
+#define COM_EXTERNAL_SERVER     (sv_external_server->integer != 0)
 #endif
 
 #ifdef _DEBUG
@@ -141,6 +143,7 @@ extern cvar_t  *z_perturb;
 extern cvar_t   *developer;
 #endif
 extern cvar_t   *dedicated;
+extern cvar_t   *sv_external_server;
 #if USE_CLIENT
 extern cvar_t   *host_speeds;
 #endif
