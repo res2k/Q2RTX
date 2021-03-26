@@ -80,6 +80,7 @@ static cvar_t           *sys_viewlog;
 static commandPrompt_t  sys_con;
 static int              sys_hidden;
 static bool             gotConsole;
+static bool             gotPipe;
 
 static void write_console_data(void *data, size_t len)
 {
@@ -210,6 +211,17 @@ static void clear_console_window(void)
     show_console_input();
 }
 
+static void check_input_pipe_error(void)
+{
+#if SERVER_IS_COMPAT
+    DWORD error = GetLastError();
+    if(error == ERROR_BROKEN_PIPE) {
+        // Exit the process if the parent exited without telling us to quit (eg due to crash)
+        Com_Quit("Broken pipe", ERR_FATAL);
+    }
+#endif
+}
+
 /*
 ================
 Sys_ConsoleInput
@@ -229,6 +241,23 @@ void Sys_RunConsole(void)
     }
 
     if (!gotConsole) {
+        if(gotPipe) {
+            DWORD bytes_avail = 0;
+            if(!PeekNamedPipe(hinput, NULL, 0, NULL, &bytes_avail, 0) || (bytes_avail == 0)) {
+                check_input_pipe_error();
+                return;
+            }
+            char buf[256];
+            const DWORD max_read = sizeof(buf) - 1; // Allow for null terminator
+            DWORD read_size = bytes_avail > max_read ? max_read : bytes_avail;
+            DWORD bytes_read = 0;
+            if(!ReadFile(hinput, buf, read_size, &bytes_read, NULL)) {
+                check_input_pipe_error();
+                return;
+            }
+            buf[bytes_read] = 0;
+            Cbuf_AddText(&cmd_buffer, buf);
+        }
         return;
     }
 
@@ -647,7 +676,11 @@ static void Sys_ConsoleInit(void)
     hinput = GetStdHandle(STD_INPUT_HANDLE);
     houtput = GetStdHandle(STD_OUTPUT_HANDLE);
     if (!GetConsoleScreenBufferInfo(houtput, &info)) {
-        Com_EPrintf("Couldn't get console buffer info.\n");
+        if((GetFileType(hinput) == FILE_TYPE_PIPE) && (GetFileType(houtput) == FILE_TYPE_PIPE)) {
+            gotPipe = true;
+        } else {
+            Com_EPrintf("Couldn't get console buffer info.\n");
+        }
         return;
     }
 #if SERVER_IS_COMPAT
@@ -1011,6 +1044,7 @@ void Sys_Error(const char *error, ...)
     Sys_SetConsoleColor(COLOR_NONE);
 #endif
 
+#if !SERVER_IS_COMPAT
 #if USE_WINSVC
     if (!statusHandle)
 #endif
@@ -1023,6 +1057,7 @@ void Sys_Error(const char *error, ...)
 #endif
         MessageBoxA(NULL, text, PRODUCT " Fatal Error", MB_ICONERROR | MB_OK);
     }
+#endif
 
     exit(1);
 }
