@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/cmd.h"
 #include "common/cmodel.h"
 #include "common/common.h"
+#include "common/compat_server_proto.h"
 #include "common/cvar.h"
 #include "common/error.h"
 #include "common/field.h"
@@ -460,8 +461,13 @@ void Com_LPrintf(print_type_t type, const char *fmt, ...)
         // graphical console
         Con_Print(msg);
 
-        // debugging console
-        Sys_ConsoleOutput(msg);
+        if(SERVER_IS_COMPAT) {
+            // Compatibility server (via stdout)
+            CompatServer_ConsoleOutput(type, msg);
+        } else {
+            // debugging console
+            Sys_ConsoleOutput(msg);
+        }
 
 #ifdef _WIN32
 		OutputDebugStringA(msg);

@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "common/cvar.h"
+#include "common/compat_server_proto.h"
 #include "common/zone.h"
 #include "client/client.h"
 #include "server/server.h"
@@ -343,45 +344,76 @@ static char* strnchr(char* str, size_t n, int c)
     return NULL;
 }
 
+static void handle_compat_server_msg(struct compat_server_msg_s* msg)
+{
+    switch(msg->op) {
+    case cso_con_output:
+        {
+            print_type_t print_type = *msg->payload - '0';
+            Com_LPrintf(print_type, "%s", msg->payload + 1);
+            break;
+        }
+    }
+}
+
 // Grab output from the compatibility server process, print to console
 static void forward_compat_server_process_output(void)
 {
     DWORD bytes_avail = 0;
-    if(!PeekNamedPipe(compat_server_process.out_pipe, NULL, 0, NULL, &bytes_avail, 0) || (bytes_avail == 0))
-        return;
+    while(PeekNamedPipe(compat_server_process.out_pipe, NULL, 0, NULL, &bytes_avail, 0) && (bytes_avail != 0)) {
+        char buf[256];
+        const DWORD max_read = sizeof(buf);
+        DWORD read_size = bytes_avail > max_read ? max_read : bytes_avail;
+        DWORD bytes_read = 0;
+        if(!ReadFile(compat_server_process.out_pipe, buf, read_size, &bytes_read, NULL)) {
+            print_last_error("ReadFile()");
+            goto protocol_error;
+        }
 
-    size_t buf_remaining = compat_server_process.input_buffer_size - compat_server_process.input_buffer_pos;
-    if (bytes_avail > buf_remaining)
-    {
-        size_t new_size = compat_server_process.input_buffer_pos + bytes_avail;
-        compat_server_process.input_buffer = Z_Realloc(compat_server_process.input_buffer, new_size);
-        compat_server_process.input_buffer_size = new_size;
-        buf_remaining = compat_server_process.input_buffer_size - compat_server_process.input_buffer_pos;
-    }
-    DWORD bytes_read = 0;
-    if(!ReadFile(compat_server_process.out_pipe, compat_server_process.input_buffer + compat_server_process.input_buffer_pos, bytes_avail, &bytes_read, NULL))
-        return;
-    compat_server_process.input_buffer_pos += bytes_read;
+        char *buf_end = buf + bytes_read;
+        char *buf_ptr = buf;
 
-    // Line-wise output to console
-    char *buf_pos = compat_server_process.input_buffer;
-    size_t scan_size = compat_server_process.input_buffer_pos;
-    char *linesep = strnchr(buf_pos, scan_size, '\n');
-    while(linesep != NULL) {
-        // Need to null-terminate...
-        *linesep = 0;
-        Con_Printf("%s\n", buf_pos);
-        size_t line_len = linesep - buf_pos + 1;
-        buf_pos += line_len;
-        scan_size -= line_len;
-        linesep = strnchr(buf_pos, scan_size, '\n');
+        while(buf_ptr < buf_end) {
+            struct compat_server_msg_s msg;
+            size_t data_consumed, data_required;
+            if (!CompatServer_BeginParseMsg(&msg, buf_ptr, buf_end - buf_ptr, &data_consumed, &data_required)) {
+                goto protocol_error;
+            }
+            buf_ptr += data_consumed;
+            while(data_required > 0) {
+                if(buf_ptr == buf_end)
+                {
+                    DWORD read_size = data_required > max_read ? max_read : data_required;
+                    DWORD bytes_read = 0;
+                    if(!ReadFile(compat_server_process.out_pipe, buf, read_size, &bytes_read, NULL)) {
+                        print_last_error("ReadFile()");
+                        CompatServer_FreeMsg(&msg);
+                        goto protocol_error;
+                    }
+                    buf_end = buf + bytes_read;
+                    buf_ptr = buf;
+                }
+                size_t data_size = buf_end - buf_ptr;
+                if (data_size > data_required)
+                    data_size = data_required;
+                if (!CompatServer_AddMsgData(&msg, buf_ptr, data_size, &data_required)) {
+                    CompatServer_FreeMsg(&msg);
+                    goto protocol_error;
+                }
+                buf_ptr += data_size;
+            }
+
+            handle_compat_server_msg(&msg);
+
+            CompatServer_FreeMsg(&msg);
+        }
     }
-    // Remove printed lines from buffer
-    if(buf_pos > compat_server_process.input_buffer) {
-        size_t remainder = (compat_server_process.input_buffer + compat_server_process.input_buffer_pos) - buf_pos;
-        memmove(compat_server_process.input_buffer, buf_pos, remainder);
-        compat_server_process.input_buffer_pos = remainder;
-    }
+
+    return;
+
+protocol_error:
+    // "Out of sync"
+    end_compat_server_process();
 }
 
 // Check whether a specific game library exists
