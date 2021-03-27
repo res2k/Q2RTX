@@ -168,6 +168,7 @@ SET(SRC_COMMON
 	common/common.c
 	common/cvar.c
 	common/error.c
+	common/external_server_proto.c
 	common/field.c
 	common/fifo.c
 	common/files.c
