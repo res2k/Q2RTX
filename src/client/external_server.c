@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  * code, or dealing with the "separate server process" case */
 
 #include "shared/shared.h"
+#include "common/cvar.h"
 #include "common/zone.h"
 #include "client/client.h"
 #include "server/server.h"
@@ -56,6 +57,9 @@ struct external_server_s
     size_t input_buffer_size;
 } external_server;
 
+#if defined(_DEBUG)
+extern cvar_t *developer;
+#endif
 extern cvar_t *fs_game;
 extern cvar_t *sys_forcegamelib;
 extern cvar_t *sys_libdir;
@@ -177,6 +181,13 @@ static bool start_external_server(const char* game_str)
 
     struct cmd_cvar_arg_array_s cvar_args;
     cmd_cvar_arg_array_init(&cvar_args);
+#if defined(_DEBUG)
+    if(developer->integer)
+        cmd_cvar_arg_array_append(&cvar_args, "developer", developer->string);
+#endif
+    cvar_t *sys_disablecrashdump = Cvar_Get("sys_disablecrashdump", "0", CVAR_NOSET);
+    if(sys_disablecrashdump->integer)
+        cmd_cvar_arg_array_append(&cvar_args, "sys_disablecrashdump", sys_disablecrashdump->string);
     cmd_cvar_arg_array_append(&cvar_args, "sys_console", "1");
     cmd_cvar_arg_array_append(&cvar_args, "sv_external_server", "1");
     cmd_cvar_arg_array_append(&cvar_args, "basedir", sys_basedir->string);
