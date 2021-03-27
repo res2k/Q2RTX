@@ -27,7 +27,7 @@ enum external_server_op_t {
 };
 
 // Output functions
-void ExternalServer_ConsoleOutput(const char *msg);
+void ExternalServer_ConsoleOutput(print_type_t print_type, const char *msg);
 
 // Input functions
 

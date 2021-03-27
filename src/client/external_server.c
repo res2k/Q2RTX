@@ -329,6 +329,18 @@ static char* strnchr(char* str, size_t n, int c)
     return NULL;
 }
 
+static void handle_external_server_msg(struct external_server_msg_s* msg)
+{
+    switch(msg->op) {
+    case eso_con_output:
+        {
+            print_type_t print_type = *msg->payload - '0';
+            Com_LPrintf(print_type, "%s", msg->payload + 1);
+            break;
+        }
+    }
+}
+
 static void forward_external_server_output(void)
 {
     DWORD bytes_avail = 0;
@@ -375,11 +387,7 @@ static void forward_external_server_output(void)
                 buf_ptr += data_size;
             }
 
-            switch(msg.op) {
-            case eso_con_output:
-                Con_Print(msg.payload);
-                break;
-            }
+            handle_external_server_msg(&msg);
 
             ExternalServer_FreeMsg(&msg);
         }

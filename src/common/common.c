@@ -463,7 +463,7 @@ void Com_LPrintf(print_type_t type, const char *fmt, ...)
 
         if(COM_EXTERNAL_SERVER) {
             // External server (via stdout)
-            ExternalServer_ConsoleOutput(msg);
+            ExternalServer_ConsoleOutput(type, msg);
         } else {
             // debugging console
             Sys_ConsoleOutput(msg);

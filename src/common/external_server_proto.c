@@ -30,9 +30,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
         |---------- Header -----------|| Payload ... |
  */
 
-void ExternalServer_ConsoleOutput(const char *msg)
+void ExternalServer_ConsoleOutput(print_type_t print_type, const char *msg)
 {
-    Sys_Printf("%c%d %s", eso_con_output, strlen(msg), msg);
+    Sys_Printf("%c%d %c%s", eso_con_output, 1 + strlen(msg), '0' + print_type, msg);
 }
 
 static void parse_append_data(struct external_server_msg_s *msg, const char *data, size_t data_size)
