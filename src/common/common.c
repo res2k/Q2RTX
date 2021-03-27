@@ -29,6 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/common.h"
 #include "common/cvar.h"
 #include "common/error.h"
+#include "common/external_server_proto.h"
 #include "common/field.h"
 #include "common/fifo.h"
 #include "common/files.h"
@@ -460,8 +461,13 @@ void Com_LPrintf(print_type_t type, const char *fmt, ...)
         // graphical console
         Con_Print(msg);
 
-        // debugging console
-        Sys_ConsoleOutput(msg);
+        if(COM_EXTERNAL_SERVER) {
+            // External server (via stdout)
+            ExternalServer_ConsoleOutput(msg);
+        } else {
+            // debugging console
+            Sys_ConsoleOutput(msg);
+        }
 
 #ifdef _WIN32
 		OutputDebugStringA(msg);

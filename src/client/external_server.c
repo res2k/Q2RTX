@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "common/cvar.h"
+#include "common/external_server_proto.h"
 #include "common/zone.h"
 #include "client/client.h"
 #include "server/server.h"
@@ -331,41 +332,64 @@ static char* strnchr(char* str, size_t n, int c)
 static void forward_external_server_output(void)
 {
     DWORD bytes_avail = 0;
-    if(!PeekNamedPipe(external_server.out_pipe, NULL, 0, NULL, &bytes_avail, 0) || (bytes_avail == 0))
-        return;
+    while(PeekNamedPipe(external_server.out_pipe, NULL, 0, NULL, &bytes_avail, 0) && (bytes_avail != 0)) {
+        char buf[256];
+        const DWORD max_read = sizeof(buf);
+        DWORD read_size = bytes_avail > max_read ? max_read : bytes_avail;
+        DWORD bytes_read = 0;
+        if(!ReadFile(external_server.out_pipe, buf, read_size, &bytes_read, NULL)) {
+            print_last_error("ReadFile()");
+            goto protocol_error;
+        }
 
-    size_t buf_remaining = external_server.input_buffer_size - external_server.input_buffer_pos;
-    if (bytes_avail > buf_remaining)
-    {
-        size_t new_size = external_server.input_buffer_pos + bytes_avail;
-        external_server.input_buffer = Z_Realloc(external_server.input_buffer, new_size);
-        external_server.input_buffer_size = new_size;
-        buf_remaining = external_server.input_buffer_size - external_server.input_buffer_pos;
-    }
-    DWORD bytes_read = 0;
-    if(!ReadFile(external_server.out_pipe, external_server.input_buffer + external_server.input_buffer_pos, bytes_avail, &bytes_read, NULL))
-        return;
-    external_server.input_buffer_pos += bytes_read;
+        char *buf_end = buf + bytes_read;
+        char *buf_ptr = buf;
 
-    // Line-wise output to console
-    char *buf_pos = external_server.input_buffer;
-    size_t scan_size = external_server.input_buffer_pos;
-    char *linesep = strnchr(buf_pos, scan_size, '\n');
-    while(linesep != NULL) {
-        // Need to null-terminate...
-        *linesep = 0;
-        Con_Printf("%s\n", buf_pos);
-        size_t line_len = linesep - buf_pos + 1;
-        buf_pos += line_len;
-        scan_size -= line_len;
-        linesep = strnchr(buf_pos, scan_size, '\n');
+        while(buf_ptr < buf_end) {
+            struct external_server_msg_s msg;
+            size_t data_consumed, data_required;
+            if (!ExternalServer_BeginParseMsg(&msg, buf_ptr, buf_end - buf_ptr, &data_consumed, &data_required)) {
+                goto protocol_error;
+            }
+            buf_ptr += data_consumed;
+            while(data_required > 0) {
+                if(buf_ptr == buf_end)
+                {
+                    DWORD read_size = data_required > max_read ? max_read : data_required;
+                    DWORD bytes_read = 0;
+                    if(!ReadFile(external_server.out_pipe, buf, read_size, &bytes_read, NULL)) {
+                        print_last_error("ReadFile()");
+                        ExternalServer_FreeMsg(&msg);
+                        goto protocol_error;
+                    }
+                    buf_end = buf + bytes_read;
+                    buf_ptr = buf;
+                }
+                size_t data_size = buf_end - buf_ptr;
+                if (data_size > data_required)
+                    data_size = data_required;
+                if (!ExternalServer_AddMsgData(&msg, buf_ptr, data_size, &data_required)) {
+                    ExternalServer_FreeMsg(&msg);
+                    goto protocol_error;
+                }
+                buf_ptr += data_size;
+            }
+
+            switch(msg.op) {
+            case eso_con_output:
+                Con_Print(msg.payload);
+                break;
+            }
+
+            ExternalServer_FreeMsg(&msg);
+        }
     }
-    // Remove printed lines from buffer
-    if(buf_pos > external_server.input_buffer) {
-        size_t remainder = (external_server.input_buffer + external_server.input_buffer_pos) - buf_pos;
-        memmove(external_server.input_buffer, buf_pos, remainder);
-        external_server.input_buffer_pos = remainder;
-    }
+
+    return;
+
+protocol_error:
+    // "Out of sync"
+    end_external_server();
 }
 
 static bool game_library_exists(const char* game, const char* prefix, const char* cpu_str)
