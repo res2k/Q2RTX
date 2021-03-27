@@ -159,6 +159,7 @@ SET(SRC_COMMON
 	common/cmd.c
 	common/cmodel.c
 	common/common.c
+	common/compat_server_proto.c
 	common/cvar.c
 	common/error.c
 	common/field.c
