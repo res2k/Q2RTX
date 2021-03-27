@@ -928,6 +928,7 @@ void Qcommon_Init(int argc, char **argv)
     cl_paused = Cvar_Get("cl_paused", "0", CVAR_ROM);
 #else
     dedicated = Cvar_Get("dedicated", "1", CVAR_ROM);
+    sv_external_server = Cvar_Get("sv_external_server", "0", CVAR_NOSET);
 #endif
     sv_running = Cvar_Get("sv_running", "0", CVAR_ROM);
     sv_paused = Cvar_Get("sv_paused", "0", CVAR_ROM);

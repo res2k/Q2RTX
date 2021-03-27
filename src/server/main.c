@@ -2247,8 +2247,6 @@ void SV_Init(void)
 
 #if !USE_CLIENT
     sv_recycle = Cvar_Get("sv_recycle", "0", 0);
-    sv_external_server = Cvar_Get("sv_external_server", "0", 0);
-    sv_external_server->flags |= CVAR_ROM;
 #endif
 
     sv_enhanced_setplayer = Cvar_Get("sv_enhanced_setplayer", "0", 0);
