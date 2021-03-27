@@ -86,6 +86,36 @@ struct cmd_cvar_arg_s
     const char *value;
 };
 
+struct cmd_cvar_arg_array_s
+{
+    struct cmd_cvar_arg_s* elements;
+    size_t count;
+    size_t reserved;
+};
+
+static void cmd_cvar_arg_array_init(struct cmd_cvar_arg_array_s *array)
+{
+    array->reserved = 8;
+    array->count = 0;
+    array->elements = Z_Malloc(array->reserved * sizeof(struct cmd_cvar_arg_s));
+}
+
+static void cmd_cvar_arg_array_free(struct cmd_cvar_arg_array_s *array)
+{
+    Z_Free(array->elements);
+}
+
+static void cmd_cvar_arg_array_append(struct cmd_cvar_arg_array_s *array, const char *name, const char *value)
+{
+    if(array->count + 1 > array->reserved) {
+        array->reserved += 8;
+        array->elements = Z_Realloc(array->elements, array->reserved * sizeof(struct cmd_cvar_arg_s));
+    }
+    array->elements[array->count].name = name;
+    array->elements[array->count].value = value;
+    array->count++;
+}
+
 static char* assemble_command_line(const char* exe, const struct cmd_cvar_arg_s cvar_args[], int num_cvar_args)
 {
     size_t need_size = strlen(exe) + 3;
@@ -145,16 +175,17 @@ static bool start_external_server(const char* game_str)
     if (!server_exe_path)
         goto fail;
 
-    const struct cmd_cvar_arg_s cvar_args[] = {
-        {"sys_console", "1"},
-        {"sv_external_server", "1"},
-        {"basedir", sys_basedir->string},
-        {"libdir", sys_libdir->string},
-        {"homedir", sys_homedir->string},
-        {"game", game_str}
-    };
+    struct cmd_cvar_arg_array_s cvar_args;
+    cmd_cvar_arg_array_init(&cvar_args);
+    cmd_cvar_arg_array_append(&cvar_args, "sys_console", "1");
+    cmd_cvar_arg_array_append(&cvar_args, "sv_external_server", "1");
+    cmd_cvar_arg_array_append(&cvar_args, "basedir", sys_basedir->string);
+    cmd_cvar_arg_array_append(&cvar_args, "libdir", sys_libdir->string);
+    cmd_cvar_arg_array_append(&cvar_args, "homedir", sys_homedir->string);
+    cmd_cvar_arg_array_append(&cvar_args, "game", game_str);
 
-    char *cmdline = assemble_command_line(server_exe_path, cvar_args, q_countof(cvar_args));
+    char *cmdline = assemble_command_line(server_exe_path, cvar_args.elements, cvar_args.count);
+    cmd_cvar_arg_array_free(&cvar_args);
     // TODO: Stuff like: "local singleplayer server"?
     if (!cmdline) {
         goto fail;
