@@ -413,6 +413,9 @@ void SV_ErrorEvent_InClient(netadr_t *from, int ee_errno, int ee_info)
     SV_ErrorEvent(from, ee_errno, ee_info);
 }
 
+static bool need_compat_server_process;
+static const char *game_string;
+
 void SV_Init_InClient(void)
 {
 #if !defined(ENABLE_SERVER_PROCESS)
@@ -436,11 +439,13 @@ void SV_Init_InClient(void)
 
     if (!have_native_gamelib && have_x86_gamelib) {
         // Try to launch external server for x86 gamelib
-        if (start_compat_server_process(game_str))
-            return;
-        // TODO: Start separate server process
-        // TODO: Other sensible things to keep up appearances?
+        need_compat_server_process = true;
     }
+
+    game_string = game_str;
+
+    if (need_compat_server_process && start_compat_server_process(game_str))
+        return;
 
     /* Default logic if we have a native gamelib, or none at all.
      * (Will generate an error message in the latter case.) */
@@ -458,7 +463,28 @@ void SV_Shutdown_InClient(const char *finalmsg, error_type_t type)
         return;
     }
 
-    end_compat_server_process();
+    if(type == ERR_DISCONNECT) {
+        /* Try to guess reason for disconnect from message (hacky),
+         * adjust behaviour */
+        if (strstr(finalmsg, "quit") != NULL) {
+            // Quit: Exit external process
+            end_compat_server_process();
+            return;
+        } else if (strstr(finalmsg, "Server disconnected") != NULL) {
+            /* Disconnected by server: don't do anything.
+             * Especially not "killserver", since the server may still be running
+             * and we'll auto-connect back */
+            return;
+        }
+    }
+
+    if (type == ERR_FATAL) {
+        end_compat_server_process();
+    } else {
+        // Non-fatal default: issue "killserver" command
+        send_server_command("killserver");
+    }
+
 #endif
 }
 
@@ -478,9 +504,17 @@ unsigned SV_Frame_InClient(unsigned msec)
 
 bool CL_ForwardToCompatServer(void)
 {
-    if(!compat_server_process.active)
-        return false;
+    // Restart external server process, if necessary
+    if(need_compat_server_process && !compat_server_process.active) {
+        if(!start_compat_server_process(game_string))
+            return false;
+    }
 
     send_server_command(Cmd_RawArgsFrom(0));
     return true;
+}
+
+bool CL_ServerIsCompat(void)
+{
+    return need_compat_server_process;
 }
