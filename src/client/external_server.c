@@ -467,6 +467,10 @@ void SV_Init_InClient(void)
         // Try to launch external server for x86 gamelib
         need_external_server = true;
     }
+    game_string = game_str;
+
+    if (need_external_server && start_external_server(game_str))
+        return;
 
     game_string = game_str;
 
@@ -489,7 +493,12 @@ void SV_Shutdown_InClient(const char *finalmsg, error_type_t type)
         return;
     }
 
-    end_external_server();
+    /* Avoid server process restarts for mere disconnects
+     * HACK: Detect quitting via Com_Quit() */
+    if((type == ERR_DISCONNECT) && (strstr(finalmsg, "quit") == NULL))
+        send_server_command("killserver");
+    else
+        end_external_server();
 #endif
 }
 
@@ -509,8 +518,10 @@ unsigned SV_Frame_InClient(unsigned msec)
 
 bool CL_ForwardToExternalServer(void)
 {
+    // Restart external server process, if necessary
     if(need_external_server && !external_server.active) {
-        return false;
+        if(!start_external_server(game_string))
+            return false;
     }
 
     send_server_command(Cmd_RawArgsFrom(0));
