@@ -320,8 +320,9 @@ so when they are typed in at the console, they will need to be forwarded.
 */
 bool CL_ForwardToServer(void)
 {
-    if (CL_ServerIsExternal() && (cls.state < ca_connected)) {
-        return CL_ForwardToExternalServer();
+    // Give the external server (console) the first stab at commands
+    if (CL_ServerIsExternal() && CL_ForwardToExternalServer()) {
+        return true;
     }
 
     char    *cmd;

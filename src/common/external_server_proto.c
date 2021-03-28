@@ -40,6 +40,11 @@ void ExternalServer_CvarChange(struct cvar_s *cvar)
     Sys_Printf("%c%d %s %s", eso_cvar_change, strlen(cvar->name) + 1 + strlen(cvar->string), cvar->name, cvar->string);
 }
 
+void ExternalServer_CommandResult(const char *cmd, bool result)
+{
+    Sys_Printf("%c%d %c%s", eso_command_result, 1 + strlen(cmd), '0' + !!result, cmd);
+}
+
 static void parse_append_data(struct external_server_msg_s *msg, const char *data, size_t data_size)
 {
     size_t old_msg_ptr = msg->_raw_msg_ptr - msg->_raw_msg;

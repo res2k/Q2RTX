@@ -24,12 +24,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 enum external_server_op_t {
     eso_con_output = 'C',
-    eso_cvar_change = 'V'
+    eso_cvar_change = 'V',
+    eso_command_result = 'M'
 };
 
 // Output functions
 void ExternalServer_ConsoleOutput(print_type_t print_type, const char *msg);
 void ExternalServer_CvarChange(struct cvar_s *cvar);
+void ExternalServer_CommandResult(const char *cmd, bool result);
 
 // Input functions
 
