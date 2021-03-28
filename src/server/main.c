@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 #include "client/input.h"
+#include "common/compat_server_proto.h"
 
 pmoveParams_t   sv_pmp;
 
@@ -110,7 +111,7 @@ cvar_t  *g_features;
 
 cvar_t  *map_override_path;
 
-static bool     sv_registered;
+static bool sv_registered;
 
 //============================================================================
 
@@ -1886,6 +1887,31 @@ static void SV_MasterShutdown(void)
     }
 }
 
+struct cvar_sync_s {
+    cvar_t *cvar;
+    void *old_str;
+};
+
+static void cvar_sync_init(struct cvar_sync_s* cvar_sync, size_t num)
+{
+    for (size_t i = 0; i < num; i++) {
+        cvar_sync[i].old_str = cvar_sync[i].cvar->string;
+    }
+}
+
+static void cvar_sync_flush(struct cvar_sync_s* cvar_sync, size_t num)
+{
+    if (!SERVER_IS_COMPAT)
+        return;
+
+    for (size_t i = 0; i < num; i++) {
+        // Assume: string point changed, so value changed as well
+        if(cvar_sync[i].old_str != cvar_sync[i].cvar->string) {
+            CompatServer_CvarChange(cvar_sync[i].cvar);
+        }
+    }
+}
+
 /*
 ==================
 SV_Frame
@@ -1901,6 +1927,10 @@ unsigned SV_Frame(unsigned msec)
 #if USE_CLIENT
     time_before_game = time_after_game = 0;
 #endif
+
+    // save states of certain cvars
+    struct cvar_sync_s cvar_sync[] = {{sv_running}, {sv_paused}};
+    cvar_sync_init(cvar_sync, q_countof(cvar_sync));
 
     // advance local server time
     svs.realtime += msec;
@@ -1932,6 +1962,8 @@ unsigned SV_Frame(unsigned msec)
     // move autonomous things around if enough time has passed
     sv.frameresidual += msec;
     if (sv.frameresidual < SV_FRAMETIME) {
+        cvar_sync_flush(cvar_sync, q_countof(cvar_sync));
+
         return SV_FRAMETIME - sv.frameresidual;
     }
 
@@ -1971,6 +2003,8 @@ unsigned SV_Frame(unsigned msec)
     // decide how long to sleep next frame
     sv.frameresidual -= SV_FRAMETIME;
     if (sv.frameresidual < SV_FRAMETIME) {
+        cvar_sync_flush(cvar_sync, q_countof(cvar_sync));
+
         return SV_FRAMETIME - sv.frameresidual;
     }
 
@@ -1979,6 +2013,8 @@ unsigned SV_Frame(unsigned msec)
         Com_DDDPrintf("Reset residual %u\n", sv.frameresidual);
         sv.frameresidual = 100;
     }
+
+    cvar_sync_flush(cvar_sync, q_countof(cvar_sync));
 
     return 0;
 }

@@ -332,6 +332,9 @@ static void end_compat_server_process(void)
     Z_Free(compat_server_process.input_buffer);
 
     memset(&compat_server_process, 0, sizeof(compat_server_process));
+
+    Cvar_Set("sv_running", "0");
+    Cvar_Set("sv_paused", "0");
 }
 
 static char* strnchr(char* str, size_t n, int c)
