@@ -439,6 +439,9 @@ void SV_ErrorEvent_InClient(netadr_t *from, int ee_errno, int ee_info)
     SV_ErrorEvent(from, ee_errno, ee_info);
 }
 
+static bool need_external_server;
+static const char *game_string;
+
 void SV_Init_InClient(void)
 {
 #if !defined(ENABLE_SERVER_PROCESS)
@@ -462,11 +465,13 @@ void SV_Init_InClient(void)
 
     if (!have_native_gamelib && have_x86_gamelib) {
         // Try to launch external server for x86 gamelib
-        if (start_external_server(game_str))
-            return;
-        // TODO: Start separate server process
-        // TODO: Other sensible things to keep up appearances?
+        need_external_server = true;
     }
+
+    game_string = game_str;
+
+    if (need_external_server && start_external_server(game_str))
+        return;
 
     /* Default logic if we have a native gamelib, or none at all.
      * (Will generate an error message in the latter case.) */
@@ -504,9 +509,15 @@ unsigned SV_Frame_InClient(unsigned msec)
 
 bool CL_ForwardToExternalServer(void)
 {
-    if(!external_server.active)
+    if(need_external_server && !external_server.active) {
         return false;
+    }
 
     send_server_command(Cmd_RawArgsFrom(0));
     return true;
+}
+
+bool CL_ServerIsExternal(void)
+{
+    return need_external_server;
 }

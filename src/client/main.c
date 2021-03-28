@@ -320,7 +320,7 @@ so when they are typed in at the console, they will need to be forwarded.
 */
 bool CL_ForwardToServer(void)
 {
-    if (cls.state < ca_connected) {
+    if (CL_ServerIsExternal() && (cls.state < ca_connected)) {
         return CL_ForwardToExternalServer();
     }
 
@@ -401,16 +401,23 @@ void CL_CheckForResend(void)
     // if the local server is running and we aren't
     // then connect
     if (cls.state < ca_connecting && sv_running->integer > ss_loading) {
+        bool need_network_connection = CL_ServerIsExternal();
+
         strcpy(cls.servername, "localhost");
-        cls.serverAddress.type = NA_LOOPBACK;
+        if(!need_network_connection)
+            cls.serverAddress.type = NA_LOOPBACK;
+        else
+            NET_StringToAdr("localhost", &cls.serverAddress, PORT_SERVER);
         cls.serverProtocol = cl_protocol->integer;
         if (cls.serverProtocol < PROTOCOL_VERSION_DEFAULT ||
             cls.serverProtocol > PROTOCOL_VERSION_Q2PRO) {
             cls.serverProtocol = PROTOCOL_VERSION_Q2PRO;
         }
 
-        // we don't need a challenge on the localhost
-        cls.state = ca_connecting;
+        NET_Config(need_network_connection ? NET_CLIENT : NET_NONE);
+
+        // we don't need a challenge on the loopback
+        cls.state = need_network_connection ? ca_challenging : ca_connecting;
         cls.connect_time -= CONNECT_FAST;
         cls.connect_count = 0;
 

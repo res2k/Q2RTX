@@ -80,6 +80,7 @@ bool CL_ForwardToServer(void);
 // things like godmode, noclip, etc, are commands directed to the server,
 // so when they are typed in at the console, they will need to be forwarded.
 bool CL_ForwardToExternalServer(void);
+bool CL_ServerIsExternal(void);
 
 void Con_Init(void);
 void Con_SetColor(color_index_t color);
