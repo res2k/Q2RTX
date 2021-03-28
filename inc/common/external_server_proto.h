@@ -23,11 +23,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define EXTERNAL_SERVER_PROTO_H_
 
 enum external_server_op_t {
-    eso_con_output = 'C'
+    eso_con_output = 'C',
+    eso_cvar_change = 'V'
 };
 
 // Output functions
 void ExternalServer_ConsoleOutput(print_type_t print_type, const char *msg);
+void ExternalServer_CvarChange(struct cvar_s *cvar);
 
 // Input functions
 

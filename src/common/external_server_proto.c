@@ -35,6 +35,11 @@ void ExternalServer_ConsoleOutput(print_type_t print_type, const char *msg)
     Sys_Printf("%c%d %c%s", eso_con_output, 1 + strlen(msg), '0' + print_type, msg);
 }
 
+void ExternalServer_CvarChange(struct cvar_s *cvar)
+{
+    Sys_Printf("%c%d %s %s", eso_cvar_change, strlen(cvar->name) + 1 + strlen(cvar->string), cvar->name, cvar->string);
+}
+
 static void parse_append_data(struct external_server_msg_s *msg, const char *data, size_t data_size)
 {
     size_t old_msg_ptr = msg->_raw_msg_ptr - msg->_raw_msg;
