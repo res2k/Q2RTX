@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 #include "client/input.h"
+#include "common/external_server_proto.h"
 
 pmoveParams_t   sv_pmp;
 
@@ -1919,6 +1920,10 @@ unsigned SV_Frame(unsigned msec)
     time_before_game = time_after_game = 0;
 #endif
 
+    // save sv_running, sv_paused state
+    int current_sv_running = sv_running->integer;
+    int current_sv_paused = sv_paused->integer;
+
     // advance local server time
     svs.realtime += msec;
 
@@ -1949,6 +1954,11 @@ unsigned SV_Frame(unsigned msec)
     // move autonomous things around if enough time has passed
     sv.frameresidual += msec;
     if (sv.frameresidual < SV_FRAMETIME) {
+        if(current_sv_running != sv_running->integer)
+            ExternalServer_CvarChange(sv_running);
+        if(current_sv_paused != sv_paused->integer)
+            ExternalServer_CvarChange(sv_paused);
+
         return SV_FRAMETIME - sv.frameresidual;
     }
 
@@ -1988,6 +1998,11 @@ unsigned SV_Frame(unsigned msec)
     // decide how long to sleep next frame
     sv.frameresidual -= SV_FRAMETIME;
     if (sv.frameresidual < SV_FRAMETIME) {
+        if(current_sv_running != sv_running->integer)
+            ExternalServer_CvarChange(sv_running);
+        if(current_sv_paused != sv_paused->integer)
+            ExternalServer_CvarChange(sv_paused);
+
         return SV_FRAMETIME - sv.frameresidual;
     }
 
@@ -1996,6 +2011,11 @@ unsigned SV_Frame(unsigned msec)
         Com_DDDPrintf("Reset residual %u\n", sv.frameresidual);
         sv.frameresidual = 100;
     }
+
+    if(current_sv_running != sv_running->integer)
+        ExternalServer_CvarChange(sv_running);
+    if(current_sv_paused != sv_paused->integer)
+        ExternalServer_CvarChange(sv_paused);
 
     return 0;
 }

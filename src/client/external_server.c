@@ -317,6 +317,9 @@ static void end_external_server(void)
     Z_Free(external_server.input_buffer);
 
     memset(&external_server, 0, sizeof(external_server));
+
+    Cvar_Set("sv_running", "0");
+    Cvar_Set("sv_paused", "0");
 }
 
 static char* strnchr(char* str, size_t n, int c)
