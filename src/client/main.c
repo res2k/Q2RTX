@@ -320,8 +320,9 @@ so when they are typed in at the console, they will need to be forwarded.
 */
 bool CL_ForwardToServer(void)
 {
-    if (CL_ServerIsCompat() && (cls.state < ca_connected)) {
-        return CL_ForwardToCompatServer();
+    // Give the compatibility server (console) the first stab at commands
+    if (CL_ServerIsCompat() && CL_ForwardToCompatServer()) {
+        return true;
     }
 
     char    *cmd;

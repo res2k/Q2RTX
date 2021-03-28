@@ -27,6 +27,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/client.h"
 #include "server/server.h"
 
+#include <assert.h>
+
 #undef SV_ErrorEvent
 #undef SV_Init
 #undef SV_Shutdown
@@ -347,6 +349,8 @@ static char* strnchr(char* str, size_t n, int c)
     return NULL;
 }
 
+static void handle_command_result(bool result, const char *cmd);
+
 static void handle_compat_server_msg(struct compat_server_msg_s* msg)
 {
     switch(msg->op) {
@@ -363,6 +367,12 @@ static void handle_compat_server_msg(struct compat_server_msg_s* msg)
                 *sep = 0;
                 Cvar_Set(msg->payload, sep + 1);
             }
+        }
+        break;
+    case cso_command_result:
+        {
+            bool result = *msg->payload - '0';
+            handle_command_result(result, msg->payload + 1);
         }
         break;
     }
@@ -546,16 +556,74 @@ unsigned SV_Frame_InClient(unsigned msec)
 #endif
 }
 
+static char *last_forward_cmd;
+static char *last_forward_cmd_raw;
+
+static void store_forward_cmd(void)
+{
+    assert(!last_forward_cmd && !last_forward_cmd_raw);
+    const char *cmd = Cmd_Argv(0);
+    const char *cmd_raw = Cmd_RawArgsFrom(0);
+    size_t buf_size = strlen(cmd) + 1 + strlen(cmd_raw) + 1;
+    last_forward_cmd = Z_Malloc(buf_size);
+    strcpy(last_forward_cmd, cmd);
+    last_forward_cmd_raw = last_forward_cmd + strlen(cmd) + 1;
+    strcpy(last_forward_cmd_raw, cmd_raw);
+}
+
+static void free_forward_cmd(void)
+{
+    Z_Free(last_forward_cmd);
+    last_forward_cmd = NULL;
+    last_forward_cmd_raw = NULL;
+}
+
 bool CL_ForwardToCompatServer(void)
 {
+    const char *cmd_raw = Cmd_RawArgsFrom(0);
+    if(last_forward_cmd_raw != NULL) {
+        int cmd_matches = strcmp(last_forward_cmd_raw, cmd_raw) == 0;
+        free_forward_cmd();
+        if(cmd_matches) {
+            // We already tried the command with the external server, let default handling deal with it
+            return false;
+        }
+    }
+
     // Restart external server process, if necessary
     if(need_compat_server_process && !compat_server_process.active) {
         if(!start_compat_server_process(game_string))
             return false;
     }
 
+    store_forward_cmd();
     send_server_command(Cmd_RawArgsFrom(0));
     return true;
+}
+
+static void handle_command_result(bool result, const char *cmd)
+{
+    if(!last_forward_cmd || (strcmp(last_forward_cmd, cmd) != 0)) {
+        /* This is probably a command generated on the server (eg alias),
+         * so print the "Unknown command" for that */
+        if(!result)
+            Com_Printf("Unknown command \"%s\"\n", cmd);
+        free_forward_cmd();
+        return;
+    }
+
+    // The command matched the last one we forwarded to the server
+
+    if (result) {
+        // Great, nothing to do
+        free_forward_cmd();
+        return;
+    }
+
+    // The server didn't want it, re-submit to cbuf
+    Cbuf_AddText(cmd_current, last_forward_cmd_raw);
+    Cbuf_AddText(cmd_current, "\n");
+    // note: don't free cmd here!
 }
 
 bool CL_ServerIsCompat(void)

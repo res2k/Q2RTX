@@ -24,12 +24,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 enum compat_server_op_t {
     cso_con_output = 'C',
-    cso_cvar_change = 'V'
+    cso_cvar_change = 'V',
+    cso_command_result = 'M'
 };
 
 // Output functions
 void CompatServer_ConsoleOutput(print_type_t print_type, const char *msg);
 void CompatServer_CvarChange(struct cvar_s *cvar);
+void CompatServer_CommandResult(const char *cmd, bool result);
 
 // Input functions
 

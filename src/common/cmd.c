@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/list.h"
 #include "common/cmd.h"
 #include "common/common.h"
+#include "common/compat_server_proto.h"
 #include "common/cvar.h"
 #include "common/error.h"
 #include "common/files.h"
@@ -1550,8 +1551,13 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
     if (cmd) {
         if (cmd->function) {
             cmd->function();
+            if(SERVER_IS_COMPAT)
+                CompatServer_CommandResult(cmd_argv[0], true);
         } else if (!CL_ForwardToServer()) {
-            Com_Printf("Can't \"%s\", not connected\n", cmd_argv[0]);
+            if(SERVER_IS_COMPAT)
+                CompatServer_CommandResult(cmd_argv[0], false);
+            else
+                Com_Printf("Can't \"%s\", not connected\n", cmd_argv[0]);
         }
         return;
     }
@@ -1561,6 +1567,8 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
     if (a) {
         if (buf->aliasCount >= ALIAS_LOOP_COUNT) {
             Com_WPrintf("Runaway alias loop\n");
+            if(SERVER_IS_COMPAT)
+                CompatServer_CommandResult(cmd_argv[0], false);
             return;
         }
         text = Cmd_MacroExpandString(a->value, true);
@@ -1568,6 +1576,8 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
             buf->aliasCount++;
             Cbuf_InsertText(buf, text);
         }
+        if(SERVER_IS_COMPAT)
+            CompatServer_CommandResult(cmd_argv[0], true);
         return;
     }
 
@@ -1575,12 +1585,18 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
     v = Cvar_FindVar(cmd_argv[0]);
     if (v) {
         Cvar_Command(v);
+        if(SERVER_IS_COMPAT)
+            CompatServer_CommandResult(cmd_argv[0], true);
         return;
     }
 
     // send it as a server command if we are connected
     if (!CL_ForwardToServer()) {
-        Com_Printf("Unknown command \"%s\"\n", cmd_argv[0]);
+        if(SERVER_IS_COMPAT) {
+            CompatServer_CommandResult(cmd_argv[0], false);
+        } else {
+            Com_Printf("Unknown command \"%s\"\n", cmd_argv[0]);
+        }
     }
 }
 
