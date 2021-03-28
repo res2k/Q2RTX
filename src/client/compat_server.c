@@ -353,6 +353,15 @@ static void handle_compat_server_msg(struct compat_server_msg_s* msg)
             Com_LPrintf(print_type, "%s", msg->payload + 1);
             break;
         }
+    case cso_cvar_change:
+        {
+            char *sep = strchr(msg->payload, ' ');
+            if(sep != 0) {
+                *sep = 0;
+                Cvar_Set(msg->payload, sep + 1);
+            }
+        }
+        break;
     }
 }
 
