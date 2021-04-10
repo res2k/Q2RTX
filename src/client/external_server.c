@@ -503,12 +503,28 @@ void SV_Shutdown_InClient(const char *finalmsg, error_type_t type)
         return;
     }
 
-    /* Avoid server process restarts for mere disconnects
-     * HACK: Detect quitting via Com_Quit() */
-    if((type == ERR_DISCONNECT) && (strstr(finalmsg, "quit") == NULL))
-        send_server_command("killserver");
-    else
+    if(type == ERR_DISCONNECT) {
+        /* Try to guess reason for disconnect from message (hacky),
+         * adjust behaviour */
+        if (strstr(finalmsg, "quit") != NULL) {
+            // Quit: Exit external process
+            end_external_server();
+            return;
+        } else if (strstr(finalmsg, "Server disconnected") != NULL) {
+            /* Disconnected by server: don't do anything.
+             * Especially not "killserver", since the server may still be running
+             * and we'll auto-connect back */
+            return;
+        }
+    }
+
+    if (type == ERR_FATAL) {
         end_external_server();
+    } else {
+        // Non-fatal default: issue "killserver" command
+        send_server_command("killserver");
+    }
+
 #endif
 }
 
