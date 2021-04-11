@@ -70,6 +70,8 @@ extern cvar_t *sys_libdir;
 extern cvar_t *sys_basedir;
 extern cvar_t *sys_homedir;
 
+extern cvar_t *sv_savedir;
+
 static char* Q_asprintf(const char *fmt, ...)
 {
     va_list argptr;
@@ -480,8 +482,10 @@ void SV_Init_InClient(void)
     }
     game_string = game_str;
 
-    if (need_external_server && start_external_server(game_str))
+    if (need_external_server && start_external_server(game_str)) {
+        sv_savedir = Cvar_Get("sv_savedir", "save", 0);
         return;
+    }
 
     game_string = game_str;
 
