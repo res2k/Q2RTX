@@ -2174,6 +2174,9 @@ void SV_zfree(voidpf opaque, voidpf address)
 }
 #endif
 
+/*
+    Commands specific to external server
+ */
 static void SV_SetPause_f(void)
 {
     if (Cmd_Argc() != 2) {
@@ -2184,8 +2187,15 @@ static void SV_SetPause_f(void)
     Cvar_Set("sv_paused", Cmd_Argv(1));
 }
 
-static const cmdreg_t c_set_pause[] = {
+static void SV_Pushmenu_f(void)
+{
+    // Assume this is a single-player only occurance; just stuff to first client
+    SV_ClientCommand(&svs.client_pool[0], "%s\n", Cmd_RawString());
+}
+
+static const cmdreg_t c_external_server[] = {
     { "set_pause", SV_SetPause_f, NULL },
+    { "pushmenu", SV_Pushmenu_f, NULL },
     { NULL }
 };
 
@@ -2344,7 +2354,7 @@ void SV_Init(void)
 #endif
 
     if(COM_EXTERNAL_SERVER) {
-        Cmd_Register(c_set_pause);
+        Cmd_Register(c_external_server);
     }
 
     sv_registered = true;
