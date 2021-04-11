@@ -70,6 +70,8 @@ extern cvar_t *sys_libdir;
 extern cvar_t *sys_basedir;
 extern cvar_t *sys_homedir;
 
+extern cvar_t *sv_savedir;
+
 // cvar argument for compatibility server process
 struct cmd_cvar_arg_s
 {
@@ -499,8 +501,10 @@ void SV_Init_InClient(void)
 
     game_string = game_str;
 
-    if (need_compat_server_process && start_compat_server_process(game_str))
+    if (need_compat_server_process && start_compat_server_process(game_str)) {
+        sv_savedir = Cvar_Get("sv_savedir", "save", 0);
         return;
+    }
 
     /* Default logic if we have a native gamelib, or none at all.
      * (Will generate an error message in the latter case.) */

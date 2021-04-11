@@ -111,6 +111,8 @@ cvar_t  *g_features;
 
 cvar_t  *map_override_path;
 
+extern cvar_t *sv_savedir;
+
 static bool sv_registered;
 
 //============================================================================
@@ -1931,7 +1933,7 @@ unsigned SV_Frame(unsigned msec)
 #endif
 
     // save states of certain cvars
-    struct cvar_sync_s cvar_sync[] = {{sv_running}, {sv_paused}};
+    struct cvar_sync_s cvar_sync[] = {{sv_running}, {sv_paused}, {sv_savedir}};
     cvar_sync_init(cvar_sync, q_countof(cvar_sync));
 
     // advance local server time
