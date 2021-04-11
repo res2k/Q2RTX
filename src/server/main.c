@@ -1782,9 +1782,11 @@ resume:
         Cvar_Set("sv_paused", "0");
         IN_Activate();
     }
-#endif
 
     return false;
+#else
+    return SV_IsLocalSinglePlayer() && sv_paused->integer;
+#endif
 }
 
 /*
@@ -2172,6 +2174,22 @@ void SV_zfree(voidpf opaque, voidpf address)
 }
 #endif
 
+static void SV_SetPause_f(void)
+{
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: %s <flag>\n", Cmd_Argv(0));
+        return;
+    }
+
+    Cvar_Set("sv_paused", Cmd_Argv(1));
+}
+
+static const cmdreg_t c_set_pause[] = {
+    { "set_pause", SV_SetPause_f, NULL },
+    { NULL }
+};
+
+
 /*
 ===============
 SV_Init
@@ -2324,6 +2342,10 @@ void SV_Init(void)
 #if USE_SYSCON
     SV_SetConsoleTitle();
 #endif
+
+    if(COM_EXTERNAL_SERVER) {
+        Cmd_Register(c_set_pause);
+    }
 
     sv_registered = true;
 }

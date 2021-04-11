@@ -73,11 +73,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define SV_InfoSet(var, val) \
     Cvar_FullSet(var, val, CVAR_SERVERINFO|CVAR_ROM, FROM_CODE)
 
-#if USE_CLIENT
-#define SV_PAUSED (sv_paused->integer != 0)
-#else
-#define SV_PAUSED 0
-#endif
+#define SV_PAUSED ((USE_CLIENT || COM_EXTERNAL_SERVER) && (sv_paused->integer != 0))
 
 #if USE_FPS
 #define SV_GMF_VARIABLE_FPS GMF_VARIABLE_FPS

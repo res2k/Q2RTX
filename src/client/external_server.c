@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  * code, or dealing with the "separate server process" case */
 
 #include "shared/shared.h"
+#include "common/common.h"
 #include "common/cvar.h"
 #include "common/external_server_proto.h"
 #include "common/zone.h"
@@ -528,6 +529,31 @@ void SV_Shutdown_InClient(const char *finalmsg, error_type_t type)
 #endif
 }
 
+// pause if there is only local client on the server
+static inline void sync_paused(void)
+{
+    // TODO: Conditions came from check_paused(), not sure they're needed...
+    if (dedicated->integer)
+        goto resume;
+
+    if (!cl_paused->integer)
+        goto resume;
+
+    if (com_timedemo->integer)
+        goto resume;
+
+    if (!sv_paused->integer) {
+        send_server_command("set_pause 1");
+    }
+
+    return;
+
+resume:
+    if (sv_paused->integer) {
+        send_server_command("set_pause 0");
+    }
+}
+
 unsigned SV_Frame_InClient(unsigned msec)
 {
 #if !defined(ENABLE_SERVER_PROCESS)
@@ -536,6 +562,7 @@ unsigned SV_Frame_InClient(unsigned msec)
     if(!external_server.active)
         return SV_Frame(msec);
 
+    sync_paused();
     forward_external_server_output();
 
     return msec; // force CL_Frame() result to have precedence
