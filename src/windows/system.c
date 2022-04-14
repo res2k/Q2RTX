@@ -650,6 +650,15 @@ static void Sys_ConsoleInit(void)
         Com_EPrintf("Couldn't get console buffer info.\n");
         return;
     }
+#if SERVER_IS_COMPAT
+    if(!gotPipe) {
+        // Refuse start from e.g. Explorer
+        const char *message = "This executable cannot be used standalone";
+        MessageBoxA(NULL, message, NULL, MB_ICONERROR);
+        Sys_Error(message);
+        return;
+    }
+#endif
 
     // determine terminal width
     width = info.dwSize.X;

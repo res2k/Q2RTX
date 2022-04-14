@@ -410,6 +410,17 @@ IF(WIN32)
         client/null.c
         windows/res/q2rtxded.rc
     )
+    IF(NOT IS_64_BIT)
+        ADD_EXECUTABLE(compat_server
+            ${SRC_COMMON} ${HEADERS_COMMON}
+            ${SRC_SHARED}
+            ${SRC_WINDOWS} ${HEADERS_WINDOWS}
+            ${SRC_SERVER} ${HEADERS_SERVER}
+            server/ac.c
+            client/null.c
+            windows/res/q2rtxcsp.rc
+        )
+    ENDIF()
 ELSE()
     IF(IS_64_BIT)
         ADD_EXECUTABLE(client
@@ -432,6 +443,9 @@ ELSE()
 ENDIF()
 
 TARGET_COMPILE_DEFINITIONS(server PRIVATE USE_SERVER=1 USE_CLIENT=0)
+IF(TARGET compat_server)
+    TARGET_COMPILE_DEFINITIONS(compat_server PRIVATE USE_SERVER=1 USE_CLIENT=0 SERVER_IS_COMPAT)
+ENDIF()
 
 IF (TARGET client)
     TARGET_COMPILE_DEFINITIONS(client PRIVATE USE_SERVER=1 USE_CLIENT=1 USE_FIXED_LIBAL=1)
@@ -507,6 +521,13 @@ IF (WIN32)
     # macro redefinition, deprecation
     TARGET_COMPILE_OPTIONS(server PRIVATE /wd4005 /wd4996)
     TARGET_COMPILE_OPTIONS(baseq2 PRIVATE /wd4005 /wd4996)
+
+    IF(TARGET compat_server)
+        TARGET_INCLUDE_DIRECTORIES(compat_server PRIVATE ../VC/inc)
+        TARGET_LINK_LIBRARIES(compat_server winmm ws2_32)
+        SET_TARGET_PROPERTIES(compat_server PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        TARGET_COMPILE_OPTIONS(compat_server PRIVATE /wd4005 /wd4996)
+    ENDIF()
 ENDIF()
 
 TARGET_INCLUDE_DIRECTORIES(baseq2 PRIVATE ../inc)
@@ -519,6 +540,11 @@ ENDIF()
 TARGET_INCLUDE_DIRECTORIES(server PRIVATE ../inc)
 TARGET_INCLUDE_DIRECTORIES(server PRIVATE "${ZLIB_INCLUDE_DIRS}")
 
+IF(TARGET compat_server)
+    TARGET_INCLUDE_DIRECTORIES(compat_server PRIVATE ../inc)
+    TARGET_INCLUDE_DIRECTORIES(compat_server PRIVATE "${ZLIB_INCLUDE_DIRS}")
+ENDIF()
+
 # Use dynamic zlib for steam runtime
 if (CONFIG_LINUX_STEAM_RUNTIME_SUPPORT)
     IF(TARGET client)
@@ -530,6 +556,9 @@ else()
         TARGET_LINK_LIBRARIES(client SDL2main SDL2-static zlibstatic)
     ENDIF()
     TARGET_LINK_LIBRARIES(server zlibstatic)
+    IF(TARGET compat_server)
+        TARGET_LINK_LIBRARIES(compat_server zlibstatic)
+    ENDIF()
 endif()
 
 IF(UNIX)
@@ -563,6 +592,19 @@ IF (IS_64_BIT)
     SET_TARGET_PROPERTIES(server PROPERTIES OUTPUT_NAME "q2rtxded")
 ELSE()
     SET_TARGET_PROPERTIES(server PROPERTIES OUTPUT_NAME "q2rtxded-x86")
+ENDIF()
+
+IF(TARGET compat_server)
+    SET_TARGET_PROPERTIES(compat_server
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_SOURCE_DIR}"
+        DEBUG_POSTFIX ""
+    )
+    SET_TARGET_PROPERTIES(compat_server PROPERTIES OUTPUT_NAME "q2rtxcsp-x86")
 ENDIF()
 
 # specify both LIBRARY and RUNTIME because one works only on Windows and another works only on Linux
