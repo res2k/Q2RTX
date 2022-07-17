@@ -378,6 +378,15 @@ static void handle_compat_server_msg(struct compat_server_msg_s* msg)
             handle_command_result(result, msg->payload + 1);
         }
         break;
+    case cso_loading_plaque:
+        {
+            bool flag = *msg->payload - '0';
+            if(flag)
+                SCR_BeginLoadingPlaque();
+            else
+                SCR_EndLoadingPlaque();
+        }
+        break;
     }
 }
 

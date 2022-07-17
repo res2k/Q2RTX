@@ -2483,3 +2483,14 @@ void SV_Shutdown(const char *finalmsg, error_type_t type)
     Z_LeakTest(TAG_SERVER);
 }
 
+#if SERVER_IS_COMPAT
+void SCR_BeginLoadingPlaque(void)
+{
+    CompatServer_LoadingPlaque(true);
+}
+
+void SCR_EndLoadingPlaque(void)
+{
+    CompatServer_LoadingPlaque(false);
+}
+#endif

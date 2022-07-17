@@ -88,8 +88,6 @@ void Con_Print(const char *text);
 void Con_Printf(const char *fmt, ...) q_printf(1, 2);
 void Con_Close(bool force);
 
-void SCR_BeginLoadingPlaque(void);
-void SCR_EndLoadingPlaque(void);
 void SCR_ModeChanged(void);
 void SCR_UpdateScreen(void);
 
@@ -137,9 +135,14 @@ float V_CalcFov(float fov_x, float width, float height);
 #define Con_SetColor(color)             (void)0
 #define Con_Print(text)                 (void)0
 
+#endif // !USE_CLIENT
+
+#if USE_CLIENT || SERVER_IS_COMPAT
+void SCR_BeginLoadingPlaque(void);
+void SCR_EndLoadingPlaque(void);
+#else
 #define SCR_BeginLoadingPlaque()        (void)0
 #define SCR_EndLoadingPlaque()          (void)0
-
-#endif // !USE_CLIENT
+#endif
 
 #endif // CLIENT_H
