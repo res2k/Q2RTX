@@ -1,0 +1,18 @@
+textures/r_mine/walmine01:
+	texture_base textures/r_mine/walmine01.wal
+	is_light 1
+	synth_emissive 1
+	emissive_threshold 150
+
+textures/e2u1/ceil1_26:
+	texture_base textures/e2u1/ceil1_26.wal
+	is_light 1
+	synth_emissive 1
+	emissive_threshold 200
+
+textures/e2u3/rocks23_2:
+	texture_base overrides/rocks23_2.tga
+	texture_normals overrides/rocks23_2_n.tga
+	texture_emissive overrides/rocks23_2_light.tga
+	emissive_factor 0.2
+	correct_albedo 1
