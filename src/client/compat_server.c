@@ -210,6 +210,7 @@ static bool start_compat_server_process(const char* game_str)
     cmd_cvar_arg_array_append(&cvar_args, "libdir", sys_libdir->string);
     cmd_cvar_arg_array_append(&cvar_args, "homedir", sys_homedir->string);
     cmd_cvar_arg_array_append(&cvar_args, "game", game_str);
+    // what about multiplayer vars (eg maxclients)?...
 
     wchar_t *cmdline = assemble_command_line(server_exe_path, cvar_args.elements, cvar_args.count);
     cmd_cvar_arg_array_free(&cvar_args);
@@ -511,6 +512,7 @@ void SV_Init_InClient(void)
     game_string = game_str;
 
     if (need_compat_server_process && start_compat_server_process(game_str)) {
+        // TODO here we could exchange a list of all cvars for syncing up...?
         sv_savedir = Cvar_Get("sv_savedir", "save", 0);
         return;
     }
@@ -589,6 +591,7 @@ unsigned SV_Frame_InClient(unsigned msec)
     if(!compat_server_process.active)
         return SV_Frame(msec);
 
+    // TODO here we could a cvar value sync...
     sync_paused();
     forward_compat_server_process_output();
 
