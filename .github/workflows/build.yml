@@ -42,8 +42,11 @@ jobs:
         name: q2rtx-windows-${{env.GITHUB_SHA_SHORT}}
         path: |
           q2rtx.exe
+          q2rtx.pdb
           q2rtxded.exe
+          q2rtxded.pdb
           q2rtxded-x86.exe
+          q2rtxded-x86.pdb
           baseq2/
           rogue/
           license.txt
