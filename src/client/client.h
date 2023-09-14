@@ -601,6 +601,7 @@ extern cvar_t   *cl_changemapcmd;
 extern cvar_t   *cl_beginmapcmd;
 
 extern cvar_t   *cl_gibs;
+extern cvar_t   *cl_flares;
 
 #define CL_PLAYER_MODEL_DISABLED     0
 #define CL_PLAYER_MODEL_ONLY_GUN     1
