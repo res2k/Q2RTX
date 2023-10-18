@@ -56,6 +56,8 @@ qhandle_t   cl_mod_explo4_big;
 
 extern cvar_t* cvar_pt_particle_emissive;
 
+qhandle_t   cl_img_flare;
+
 #define MAX_FOOTSTEP_SFX    9
 
 typedef struct {
@@ -303,6 +305,8 @@ void CL_RegisterTEntModels(void)
     		model->sprite_vertical = true;
         }
     }
+
+    cl_img_flare = R_RegisterSprite("misc/flare.tga");
 
     // check for remaster powerscreen model (ugly!)
     len = FS_LoadFile("models/items/armor/effect/tris.md2", &data);

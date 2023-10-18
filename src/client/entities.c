@@ -24,6 +24,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 extern qhandle_t cl_mod_powerscreen;
 extern qhandle_t cl_mod_laser;
 extern qhandle_t cl_mod_dmspot;
+extern qhandle_t cl_img_flare;
 
 /*
 =========================================================================
@@ -663,7 +664,7 @@ static void CL_AddPacketEntities(void)
                 if (renderfx & RF_CUSTOMSKIN && (unsigned)s1->frame < cl.csr.max_images)
                     ent.skin = cl.image_precache[s1->frame];
                 if (!ent.skin)
-                    goto skip;  // skip default flare for now, it looks bad
+                    ent.skin = cl_img_flare;
                 ent.scale = s1->scale ? s1->scale : 1;
                 ent.flags = renderfx | RF_TRANSLUCENT;
                 if (!s1->skinnum)
