@@ -509,6 +509,11 @@ running a dedicated server and 0 otherwise.
 - 1 — print to stdout and read commands from stdin, but don't assume it is a terminal
 - 2 — enable command line editing and colored text output
 
+#### `sys_history`
+Specifies how many lines to save into system console history file before
+exiting Q2PRO, to be reloaded on next startup. Maximum number of history
+lines is 128. Default value is 0.
+
 ##### System console key bindings
 The following key bindings are available in Windows console and in TTY console
 when command line editing is enabled:
