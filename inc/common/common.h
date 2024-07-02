@@ -162,6 +162,10 @@ extern cvar_t   *allow_download_others;
 
 extern cvar_t   *rcon_password;
 
+#if USE_SYSCON
+extern cvar_t   *sys_history;
+#endif
+
 #if USE_CLIENT
 // host_speeds times
 extern unsigned     time_before_game;

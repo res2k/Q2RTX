@@ -124,6 +124,10 @@ cvar_t  *rcon_password;
 
 extern cvar_t *fs_shareware;
 
+#if USE_SYSCON
+cvar_t  *sys_history;
+#endif
+
 const char  com_version_string[] =
     APPLICATION " " VERSION_STRING " " __DATE__ " " BUILDSTRING " " CPUSTRING;
 
@@ -928,6 +932,10 @@ void Qcommon_Init(int argc, char **argv)
     allow_download_others = Cvar_Get("allow_download_others", "0", 0);
 
     rcon_password = Cvar_Get("rcon_password", "", CVAR_PRIVATE);
+
+#if USE_SYSCON
+    sys_history = Cvar_Get("sys_history", "0", 0);
+#endif
 
     Cmd_AddCommand("z_stats", Z_Stats_f);
 
