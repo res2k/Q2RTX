@@ -934,7 +934,7 @@ void Qcommon_Init(int argc, char **argv)
     rcon_password = Cvar_Get("rcon_password", "", CVAR_PRIVATE);
 
 #if USE_SYSCON
-    sys_history = Cvar_Get("sys_history", "0", 0);
+    sys_history = Cvar_Get("sys_history", STRINGIFY(HISTORY_SIZE), 0);
 #endif
 
     Cmd_AddCommand("z_stats", Z_Stats_f);

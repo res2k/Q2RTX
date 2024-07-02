@@ -388,7 +388,7 @@ game.  Default value is 4.
 #### `con_history`
 Specifies how many lines to save into console history file before exiting
 Q2PRO, to be reloaded on next startup. Maximum number of history lines is
-128. Default value is 0.
+128. Default value is 128.
 
 #### `con_scroll`
 Controls automatic scrolling of console text when some event occurs. This

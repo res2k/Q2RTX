@@ -512,7 +512,7 @@ running a dedicated server and 0 otherwise.
 #### `sys_history`
 Specifies how many lines to save into system console history file before
 exiting Q2PRO, to be reloaded on next startup. Maximum number of history
-lines is 128. Default value is 0.
+lines is 128. Default value is 128.
 
 ##### System console key bindings
 The following key bindings are available in Windows console and in TTY console
