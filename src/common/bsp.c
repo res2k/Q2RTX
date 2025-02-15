@@ -1284,9 +1284,15 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
         len = LittleLong(header->lumps[info->lump].filelen);
         end = ofs + len;
         if (end < ofs || end > filelen) {
-            Com_SetLastError(va("%s lump out of bounds", info->name));
-            ret = Q_ERR_INVALID_FORMAT;
-            goto fail2;
+            if (!info->lump) {
+                // EntString workaround for ztnmap1
+                Com_WPrintf("%s lump out of bounds, fixing", info->name);
+                len = filelen - ofs;
+            } else {
+                Com_SetLastError(va("%s lump out of bounds", info->name));
+                ret = Q_ERR_INVALID_FORMAT;
+                goto fail2;
+            }
         }
         if (len % info->disksize[extended]) {
             Com_SetLastError(va("%s lump has odd size", info->name));
