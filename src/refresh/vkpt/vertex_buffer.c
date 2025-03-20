@@ -1518,6 +1518,7 @@ VkResult vkpt_light_buffers_create(bsp_mesh_t *bsp_mesh)
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		buffer_attach_name(qvk.buf_light_stats + frame, va("light stats %d", frame));
 	}
+	Com_DDPrintf("light stats buffers: %zu bytes\n", sizeof(uint32_t) * num_stats * NUM_LIGHT_STATS_BUFFERS);
 
 	assert(NUM_LIGHT_STATS_BUFFERS == 3);
 
