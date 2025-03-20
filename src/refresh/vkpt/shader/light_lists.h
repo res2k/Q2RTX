@@ -288,8 +288,8 @@ sample_polygonal_lights(
 
 			uint addr = get_light_stats_addr(list_idx, current_idx, get_primary_direction(n));
 
-			uint num_hits = light_stats_bufers[buffer_idx].stats[addr];
-			uint num_misses = light_stats_bufers[buffer_idx].stats[addr + 1];
+			uint num_hits = light_stats_buffers[buffer_idx].stats[addr];
+			uint num_misses = light_stats_buffers[buffer_idx].stats[addr + 1];
 			uint num_total = num_hits + num_misses;
 
 			if(num_total > 0)

@@ -236,7 +236,7 @@ layout(set = VERTEX_BUFFER_DESC_SET_IDX, binding = SUN_COLOR_UBO_BINDING_IDX, st
 
 layout(set = VERTEX_BUFFER_DESC_SET_IDX, binding = LIGHT_STATS_BUFFER_BINDING_IDX) buffer LIGHT_STATS_BUFFERS {
 	uint stats[];
-} light_stats_bufers[3];
+} light_stats_buffers[3];
 
 uint animate_material(uint material, int frame);
 

@@ -800,7 +800,7 @@ get_direct_illumination(
 		if(vis == 0) addr += 1;
 
 		// Increment the ray counter
-		atomicAdd(light_stats_bufers[global_ubo.current_frame_idx % NUM_LIGHT_STATS_BUFFERS].stats[addr], 1);
+		atomicAdd(light_stats_buffers[global_ubo.current_frame_idx % NUM_LIGHT_STATS_BUFFERS].stats[addr], 1);
 	}
 
 	if(null_light)
