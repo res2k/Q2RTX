@@ -192,7 +192,8 @@ sample_polygonal_lights(
 		out int light_index,
 		out float pdfw,
 		out bool is_sky_light,
-		vec3 rng)
+		vec3 rng,
+		vec3 ls_jitter)
 {
 	position_light = vec3(0);
 	light_index = -1;
@@ -271,15 +272,13 @@ sample_polygonal_lights(
 		if(m > 0 && current_idx < global_ubo.num_static_lights)
 		{
 			uint num_hits, num_misses;
-			light_stats_get(list_idx, current_idx, n, is_gradient, num_hits, num_misses);
+			light_stats_hash_get(p, ls_jitter, current_idx, n, is_gradient, num_hits, num_misses);
+			if (num_misses > 0)
+				num_hits = max(num_hits, 1); // allow for a minimal chance of using the light
 			uint num_total = num_hits + num_misses;
 
 			if(num_total > 0)
-			{
-				// Adjust the mass, but set a lower limit on the factor to avoid
-				// extreme changes in the sampling.
-				m *= max(float(num_hits) / float(num_total), 0.1);
-			}
+				m *= float(num_hits) / float(num_total);
 		}
 
 		mass += m;

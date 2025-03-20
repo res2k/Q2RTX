@@ -266,7 +266,8 @@ typedef struct QVK_s {
 
 	BufferResource_t            buf_light;
 	BufferResource_t            buf_light_staging[MAX_FRAMES_IN_FLIGHT];
-	BufferResource_t            buf_light_stats[NUM_LIGHT_STATS_BUFFERS];
+	BufferResource_t            buf_light_stats_hash_header_staging;
+	BufferResource_t            buf_light_stats_hash[NUM_LIGHT_STATS_BUFFERS];
 	BufferResource_t            buf_light_counts_history[LIGHT_COUNT_HISTORY];
 	
 	BufferResource_t            buf_iqm_matrices;

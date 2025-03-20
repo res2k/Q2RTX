@@ -48,7 +48,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define TONE_MAPPING_BUFFER_BINDING_IDX 6
 #define SUN_COLOR_BUFFER_BINDING_IDX 7
 #define SUN_COLOR_UBO_BINDING_IDX 8
-#define LIGHT_STATS_BUFFER_BINDING_IDX 9
+#define LIGHT_STATS_HASH_BUFFER_BINDING_IDX 9
 
 #define VERTEX_BUFFER_WORLD 0
 #define VERTEX_BUFFER_INSTANCED 1
@@ -151,6 +151,21 @@ BEGIN_SHADER_STRUCT( SunColorBuffer )
 }
 END_SHADER_STRUCT( SunColorBuffer )
 
+BEGIN_SHADER_STRUCT( LightStatsHashHeader )
+{
+	vec3 camera_pos;
+	uint pad;
+}
+END_SHADER_STRUCT( LightStatsHashHeader )
+
+BEGIN_SHADER_STRUCT( LightStatsHashEntry )
+{
+	uint checksum;
+	uint pad;
+	uint hits;
+	uint misses;
+}
+END_SHADER_STRUCT( LightStatsHashEntry )
 
 #ifdef VKPT_SHADER
 
@@ -234,9 +249,10 @@ layout(set = VERTEX_BUFFER_DESC_SET_IDX, binding = SUN_COLOR_UBO_BINDING_IDX, st
 	SunColorBuffer sun_color_ubo;
 };
 
-layout(set = VERTEX_BUFFER_DESC_SET_IDX, binding = LIGHT_STATS_BUFFER_BINDING_IDX) buffer LIGHT_STATS_BUFFERS {
-	uint stats[];
-} light_stats_buffers[3];
+layout(set = VERTEX_BUFFER_DESC_SET_IDX, binding = LIGHT_STATS_HASH_BUFFER_BINDING_IDX) buffer LIGHT_STATS_HASH_BUFFERS {
+	LightStatsHashHeader header;
+	LightStatsHashEntry stats[];
+} light_stats_hash_buffers[NUM_LIGHT_STATS_BUFFERS];
 
 uint animate_material(uint material, int frame);
 

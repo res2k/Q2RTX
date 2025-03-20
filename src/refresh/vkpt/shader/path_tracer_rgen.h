@@ -52,15 +52,17 @@ uniform accelerationStructureEXT topLevelAS[TLAS_COUNT];
 #define RNG_PRIMARY_APERTURE_X   2
 #define RNG_PRIMARY_APERTURE_Y   3
 
-#define RNG_NEE_LIGHT_SELECTION(bounce)   (4 + 0 + 9 * bounce)
-#define RNG_NEE_TRI_X(bounce)             (4 + 1 + 9 * bounce)
-#define RNG_NEE_TRI_Y(bounce)             (4 + 2 + 9 * bounce)
-#define RNG_NEE_LIGHT_TYPE(bounce)        (4 + 3 + 9 * bounce)
-#define RNG_BRDF_X(bounce)                (4 + 4 + 9 * bounce)
-#define RNG_BRDF_Y(bounce)                (4 + 5 + 9 * bounce)
-#define RNG_BRDF_FRESNEL(bounce)          (4 + 6 + 9 * bounce)
-#define RNG_SUNLIGHT_X(bounce)			  (4 + 7 + 9 * bounce)
-#define RNG_SUNLIGHT_Y(bounce)			  (4 + 8 + 9 * bounce)
+#define RNG_NEE_LIGHT_SELECTION(bounce)   (4 + 0 + 11 * bounce)
+#define RNG_NEE_TRI_X(bounce)             (4 + 1 + 11 * bounce)
+#define RNG_NEE_TRI_Y(bounce)             (4 + 2 + 11 * bounce)
+#define RNG_NEE_LIGHT_TYPE(bounce)        (4 + 3 + 11 * bounce)
+#define RNG_NEE_LS_JITTER_X(bounce)       (4 + 4 + 11 * bounce)
+#define RNG_NEE_LS_JITTER_Y(bounce)       (4 + 5 + 11 * bounce)
+#define RNG_BRDF_X(bounce)                (4 + 6 + 11 * bounce)
+#define RNG_BRDF_Y(bounce)                (4 + 7 + 11 * bounce)
+#define RNG_BRDF_FRESNEL(bounce)          (4 + 8 + 11 * bounce)
+#define RNG_SUNLIGHT_X(bounce)			  (4 + 9 + 11 * bounce)
+#define RNG_SUNLIGHT_Y(bounce)			  (4 + 10 + 11 * bounce)
 
 #define PRIMARY_RAY_CULL_MASK        (AS_FLAG_OPAQUE | AS_FLAG_TRANSPARENT | AS_FLAG_VIEWER_WEAPON | AS_FLAG_SKY)
 #define REFLECTION_RAY_CULL_MASK     (AS_FLAG_OPAQUE | AS_FLAG_SKY)
@@ -701,6 +703,8 @@ get_direct_illumination(
 		get_rng(RNG_NEE_LIGHT_SELECTION(bounce)),
 		get_rng(RNG_NEE_TRI_X(bounce)),
 		get_rng(RNG_NEE_TRI_Y(bounce)));
+	vec2 rng_ls_jitter = vec2(get_rng(RNG_NEE_LS_JITTER_X(bounce)), get_rng(RNG_NEE_LS_JITTER_Y(bounce)));
+	vec3 ls_jitter = light_stats_hash_jitter(geo_normal, rng_ls_jitter);
 
 	/* polygonal light illumination */
 	if(enable_polygonal) 
@@ -720,7 +724,8 @@ get_direct_illumination(
 			polygonal_light_index,
 			polygonal_light_pdfw,
 			polygonal_light_is_sky,
-			rng);
+			rng,
+			ls_jitter);
 	}
 
 	bool is_polygonal = true;
@@ -792,7 +797,7 @@ get_direct_illumination(
 		&& polygonal_light_index >= 0 
 		&& polygonal_light_index < global_ubo.num_static_lights)
 	{
-		light_stats_accumulate(cluster_idx, polygonal_light_index, normal, vis == 0);
+		light_stats_hash_accumulate(position, ls_jitter, polygonal_light_index, normal, vis == 0);
 	}
 
 	if(null_light)

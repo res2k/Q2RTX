@@ -35,6 +35,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define BLUE_NOISE_RES     (256)
 
 #define NUM_LIGHT_STATS_BUFFERS 3
+#define NUM_LIGHT_STATS_HASH_LOOKUPS    8
+#define LIGHT_STATS_HASH_BITS           19
+#define LIGHT_STATS_HASH_MASK           ((1 << LIGHT_STATS_HASH_BITS) - 1) // Seems to reasonably work well in most cases...
 
 #define PRIMARY_RAY_T_MAX 10000
 

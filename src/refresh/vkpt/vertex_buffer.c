@@ -372,11 +372,12 @@ vkpt_vertex_buffer_upload_bsp_mesh(bsp_mesh_t* bsp_mesh)
 		model->geometry.sbt_offset = model->masked ? bsp_mesh->geom_masked.sbt_offset : bsp_mesh->geom_opaque.sbt_offset;
 	}
 
-	if (qvk.buf_light_stats[0].buffer)
+	if (qvk.buf_light_stats_hash[0].buffer)
 	{
-		vkCmdFillBuffer(cmd_buf, qvk.buf_light_stats[0].buffer, 0, qvk.buf_light_stats[0].size, 0);
-		vkCmdFillBuffer(cmd_buf, qvk.buf_light_stats[1].buffer, 0, qvk.buf_light_stats[1].size, 0);
-		vkCmdFillBuffer(cmd_buf, qvk.buf_light_stats[2].buffer, 0, qvk.buf_light_stats[2].size, 0);
+		for (int c = 0; c < 3; c++)
+		{
+			vkCmdFillBuffer(cmd_buf, qvk.buf_light_stats_hash[c].buffer, 0, qvk.buf_light_stats_hash[c].size, 0);
+		}
 	}
 
 	vkpt_submit_command_buffer(cmd_buf, qvk.queue_graphics, (1 << qvk.device_count) - 1, 0, NULL, NULL, NULL, 0, NULL, NULL, NULL);
@@ -437,9 +438,18 @@ vkpt_light_buffer_upload_staging(VkCommandBuffer cmd_buf)
 	vkCmdCopyBuffer(cmd_buf, staging->buffer, qvk.buf_light.buffer, 1, &copyRegion);
 
 	int buffer_idx = qvk.frame_counter % 3;
-	if (qvk.buf_light_stats[buffer_idx].buffer)
+	if (qvk.buf_light_stats_hash[buffer_idx].buffer)
 	{
-		vkCmdFillBuffer(cmd_buf, qvk.buf_light_stats[buffer_idx].buffer, 0, qvk.buf_light_stats[buffer_idx].size, 0);
+		LightStatsHashHeader *light_stats_hash_header = (LightStatsHashHeader *)buffer_map(&qvk.buf_light_stats_hash_header_staging);
+		VectorCopy(vkpt_refdef.fd->vieworg, light_stats_hash_header->camera_pos);
+		buffer_unmap(&qvk.buf_light_stats_hash_header_staging);
+	
+		VkBufferCopy hash_header_copy_Region = {
+			.size = sizeof(LightStatsHashHeader),
+		};
+		vkCmdCopyBuffer(cmd_buf, qvk.buf_light_stats_hash_header_staging.buffer, qvk.buf_light_stats_hash[buffer_idx].buffer, 1, &hash_header_copy_Region);
+		VkDeviceSize fill_offset = sizeof(LightStatsHashHeader);
+		vkCmdFillBuffer(cmd_buf, qvk.buf_light_stats_hash[buffer_idx].buffer, fill_offset, qvk.buf_light_stats_hash[buffer_idx].size - fill_offset, 0);
 	}
 
 	return VK_SUCCESS;
@@ -1294,7 +1304,7 @@ vkpt_vertex_buffer_create()
 		{
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.descriptorCount = 3,
-			.binding = LIGHT_STATS_BUFFER_BINDING_IDX,
+			.binding = LIGHT_STATS_HASH_BUFFER_BINDING_IDX,
 			.stageFlags = VK_SHADER_STAGE_ALL,
 		}
 	};
@@ -1511,42 +1521,50 @@ VkResult vkpt_light_buffers_create(bsp_mesh_t *bsp_mesh)
 	if (num_stats == 0)
 		num_stats = 1;
 
-	for (int frame = 0; frame < NUM_LIGHT_STATS_BUFFERS; frame++)
-	{
-		buffer_create(qvk.buf_light_stats + frame, sizeof(uint32_t) * num_stats,
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		buffer_attach_name(qvk.buf_light_stats + frame, va("light stats %d", frame));
-	}
-	Com_DDPrintf("light stats buffers: %zu bytes\n", sizeof(uint32_t) * num_stats * NUM_LIGHT_STATS_BUFFERS);
-
 	static_assert(NUM_LIGHT_STATS_BUFFERS == 3);
 
-	VkDescriptorBufferInfo light_stats_buf_info[] = { {
-			.buffer = qvk.buf_light_stats[0].buffer,
+	uint32_t num_stats_hash = 1 << LIGHT_STATS_HASH_BITS;
+
+	buffer_create(&qvk.buf_light_stats_hash_header_staging, sizeof(LightStatsHashHeader),
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		buffer_attach_name(&qvk.buf_light_stats_hash_header_staging, "light stats hash staging");
+
+	size_t light_stats_hash_buffer_size = sizeof(LightStatsHashHeader) + sizeof(LightStatsHashEntry) * num_stats_hash;
+	for (int frame = 0; frame < NUM_LIGHT_STATS_BUFFERS; frame++)
+	{
+		buffer_create(qvk.buf_light_stats_hash + frame, light_stats_hash_buffer_size,
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		buffer_attach_name(qvk.buf_light_stats_hash + frame, va("light stats hash %d", frame));
+	}
+	Com_DDPrintf("light stats buffers: %zu bytes\n", light_stats_hash_buffer_size * NUM_LIGHT_STATS_BUFFERS);
+
+	VkDescriptorBufferInfo light_stats_hash_buf_info[] = { {
+			.buffer = qvk.buf_light_stats_hash[0].buffer,
 			.offset = 0,
-			.range = qvk.buf_light_stats[0].size,
+			.range = qvk.buf_light_stats_hash[0].size,
 		}, {
-			.buffer = qvk.buf_light_stats[1].buffer,
+			.buffer = qvk.buf_light_stats_hash[1].buffer,
 			.offset = 0,
-			.range = qvk.buf_light_stats[1].size,
+			.range = qvk.buf_light_stats_hash[1].size,
 		}, {
-			.buffer = qvk.buf_light_stats[2].buffer,
+			.buffer = qvk.buf_light_stats_hash[2].buffer,
 			.offset = 0,
-			.range = qvk.buf_light_stats[2].size,
+			.range = qvk.buf_light_stats_hash[2].size,
 		} };
 
-	VkWriteDescriptorSet output_buf_write = {
+	VkWriteDescriptorSet hash_output_buf_write = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		.dstSet = qvk.desc_set_vertex_buffer,
-		.dstBinding = LIGHT_STATS_BUFFER_BINDING_IDX,
+		.dstBinding = LIGHT_STATS_HASH_BUFFER_BINDING_IDX,
 		.dstArrayElement = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = LENGTH(light_stats_buf_info),
-		.pBufferInfo = light_stats_buf_info,
+		.descriptorCount = LENGTH(light_stats_hash_buf_info),
+		.pBufferInfo = light_stats_hash_buf_info,
 	};
 
-	vkUpdateDescriptorSets(qvk.device, 1, &output_buf_write, 0, NULL);
+	vkUpdateDescriptorSets(qvk.device, 1, &hash_output_buf_write, 0, NULL);
 
 	// Set up buffers for light counts history
 	VkDescriptorBufferInfo light_counts_buf_info[LIGHT_COUNT_HISTORY];
@@ -1562,9 +1580,15 @@ VkResult vkpt_light_buffers_create(bsp_mesh_t *bsp_mesh)
 		light_counts_buf_info[h].range = qvk.buf_light_counts_history[h].size;
 	}
 
-	output_buf_write.dstBinding = LIGHT_COUNTS_HISTORY_BUFFER_BINDING_IDX;
-	output_buf_write.descriptorCount = LENGTH(light_counts_buf_info);
-	output_buf_write.pBufferInfo = light_counts_buf_info;
+	VkWriteDescriptorSet output_buf_write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = qvk.desc_set_vertex_buffer,
+		.dstBinding = LIGHT_COUNTS_HISTORY_BUFFER_BINDING_IDX,
+		.dstArrayElement = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = LENGTH(light_counts_buf_info),
+		.pBufferInfo = light_counts_buf_info,
+	};
 
 	vkUpdateDescriptorSets(qvk.device, 1, &output_buf_write, 0, NULL);
 
@@ -1575,8 +1599,9 @@ VkResult vkpt_light_buffers_destroy()
 {
 	for (int frame = 0; frame < NUM_LIGHT_STATS_BUFFERS; frame++)
 	{
-		buffer_destroy(qvk.buf_light_stats + frame);
+		buffer_destroy(qvk.buf_light_stats_hash + frame);
 	}
+	buffer_destroy(&qvk.buf_light_stats_hash_header_staging);
 
 	for (int h = 0; h < LIGHT_COUNT_HISTORY; h++)
 	{

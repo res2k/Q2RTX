@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef LIGHT_STATS_GLSL_
 #define LIGHT_STATS_GLSL_
 
+#include "hash.glsl"
+
 uint get_light_stats_addr(uint cluster, uint light, uint side)
 {
     uint addr = cluster;
@@ -39,27 +41,83 @@ uint get_primary_direction(vec3 dir)
     return (dir.z < 0) ? 5 : 4;
 }
 
-void light_stats_accumulate(uint cluster, uint light, vec3 normal, bool shadowed)
+ivec4 light_stats_hash_cell(vec3 world_pos, vec3 jitter, vec3 cam_pos)
+{
+    return spatialhash_cell(world_pos, jitter, cam_pos, 0.125, 5);
+}
+
+uvec2 light_stats_hash(vec3 world_pos, vec3 jitter, vec3 cam_pos, uint light, uint side)
+{
+    ivec4 cell = light_stats_hash_cell(world_pos, jitter, cam_pos);
+    // Pack cell down to 16 bpc
+    uvec2 cell_packed = uvec2(uint(cell.x) & 0xffff | uint(cell.y) << 16, uint(cell.z) & 0xffff | uint(cell.w) << 16);
+    uint light_idx = light * 6 + side;
+    uint hash_1 = hash_pcg(light_idx + hash_pcg(cell_packed.y + hash_pcg(cell_packed.x)));
+    uint hash_2 = hash_xxhash32(uvec3(cell_packed.x, cell_packed.y, light_idx));
+    return uvec2(hash_1, hash_2);
+}
+
+int light_stats_hash_find_for_update(uint buffer_idx, uvec2 hash)
+{
+    int index = int(hash.x & LIGHT_STATS_HASH_MASK);
+    uint checksum = hash.y;
+    for(int i = 0; i < 32; i++)
+    {
+        uint checksum_prev = atomicCompSwap(light_stats_hash_buffers[buffer_idx].stats[index].checksum, 0, checksum);
+        if (checksum_prev == 0 || checksum_prev == checksum)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+int light_stats_hash_find(uint buffer_idx, uvec2 hash)
+{
+    int index = int(hash.x & LIGHT_STATS_HASH_MASK);
+    uint checksum = hash.y;
+    for(int i = 0; i < 32; i++)
+    {
+        uint read_checksum = light_stats_hash_buffers[buffer_idx].stats[index].checksum;
+        if (read_checksum == checksum)
+            return index;
+        else if (read_checksum == 0)
+            break;
+        index++;
+    }
+    return -1;
+}
+
+vec3 light_stats_hash_jitter(vec3 normal, vec2 rng)
+{
+    mat3x3 ts = construct_ONB_frisvad(normal);
+
+    rng = rng * vec2(2) - vec2(1);
+    vec3 jitter = ts[0] * rng.x + ts[2] * rng.y;
+    jitter *= clamp(global_ubo.pt_light_stats_hash_jitter, 0, 1);
+    return jitter;
+}
+
+void light_stats_hash_accumulate(vec3 world_pos, vec3 jitter, uint light, vec3 normal, bool shadowed)
 {
     if(global_ubo.pt_light_stats == 0) return;
 
-    uint addr = get_light_stats_addr(cluster, light, get_primary_direction(normal));
+    int buffer_idx = global_ubo.current_frame_idx % NUM_LIGHT_STATS_BUFFERS;
+    vec3 cam_pos = light_stats_hash_buffers[buffer_idx].header.camera_pos;
+    int index = light_stats_hash_find_for_update(buffer_idx, light_stats_hash(world_pos, jitter, cam_pos, light, get_primary_direction(normal)));
+    if (index == -1) return;
 
-    // Offset 0 is unshadowed rays,
-    // Offset 1 is shadowed rays
-    if(shadowed) addr += 1;
-
-    // Increment the ray counter
-    atomicAdd(light_stats_buffers[global_ubo.current_frame_idx % NUM_LIGHT_STATS_BUFFERS].stats[addr], 1);
+    if(shadowed)
+        atomicAdd(light_stats_hash_buffers[buffer_idx].stats[index].misses, 1);
+    else
+        atomicAdd(light_stats_hash_buffers[buffer_idx].stats[index].hits, 1);
 }
 
-void light_stats_get(uint cluster, uint light, vec3 normal, bool is_gradient, out uint num_hits, out uint num_misses)
+void light_stats_hash_get(vec3 world_pos, vec3 jitter, uint light, vec3 normal, bool is_gradient, out uint num_hits, out uint num_misses)
 {
-    if(global_ubo.pt_light_stats == 0) {
-        num_hits = 0;
-        num_misses = 0;
+    num_hits = 0;
+    num_misses = 0;
+    if(global_ubo.pt_light_stats == 0)
         return;
-    }
 
     uint buffer_idx = global_ubo.current_frame_idx;
     // Regular pixels get shadowing stats from the previous frame;
@@ -68,10 +126,13 @@ void light_stats_get(uint cluster, uint light, vec3 normal, bool is_gradient, ou
     buffer_idx += is_gradient ? (NUM_LIGHT_STATS_BUFFERS - 2) : (NUM_LIGHT_STATS_BUFFERS - 1);
     buffer_idx = buffer_idx % NUM_LIGHT_STATS_BUFFERS;
 
-    uint addr = get_light_stats_addr(cluster, light, get_primary_direction(normal));
+    vec3 cam_pos = light_stats_hash_buffers[buffer_idx].header.camera_pos;
+    int index = light_stats_hash_find(buffer_idx, light_stats_hash(world_pos, jitter, cam_pos, light, get_primary_direction(normal)));
+    if (index == -1) return;
 
-    num_hits = light_stats_buffers[buffer_idx].stats[addr];
-    num_misses = light_stats_buffers[buffer_idx].stats[addr + 1];
+    num_hits = light_stats_hash_buffers[buffer_idx].stats[index].hits;
+    num_misses = light_stats_hash_buffers[buffer_idx].stats[index].misses;
 }
+
 
 #endif // LIGHT_STATS_GLSL_
