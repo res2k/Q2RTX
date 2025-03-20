@@ -9,6 +9,7 @@ set(SHADER_SOURCE_DEPENDENCIES
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/global_ubo.h
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/god_rays_shared.h
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/light_lists.h
+    ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/light_stats.glsl
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/path_tracer_rgen.h
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/path_tracer.h
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/path_tracer_hit_shaders.h

@@ -787,20 +787,12 @@ get_direct_illumination(
 		polygon lights do not have polygonal indices, and it would be difficult to map them 
 		between frames.
 	*/
-	if(global_ubo.pt_light_stats != 0 
-		&& is_polygonal 
+	if(is_polygonal 
 		&& !null_light
 		&& polygonal_light_index >= 0 
 		&& polygonal_light_index < global_ubo.num_static_lights)
 	{
-		uint addr = get_light_stats_addr(cluster_idx, polygonal_light_index, get_primary_direction(normal));
-
-		// Offset 0 is unshadowed rays,
-		// Offset 1 is shadowed rays
-		if(vis == 0) addr += 1;
-
-		// Increment the ray counter
-		atomicAdd(light_stats_buffers[global_ubo.current_frame_idx % NUM_LIGHT_STATS_BUFFERS].stats[addr], 1);
+		light_stats_accumulate(cluster_idx, polygonal_light_index, normal, vis == 0);
 	}
 
 	if(null_light)

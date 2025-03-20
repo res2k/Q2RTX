@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef _LIGHT_LISTS_
 #define _LIGHT_LISTS_
 
+#include "light_stats.glsl"
+
 #define MAX_BRUTEFORCE_SAMPLING 8
 
 mat3
@@ -174,15 +176,6 @@ sample_projected_triangle(vec3 pt, mat3 positions, vec2 rnd, out vec3 light_norm
 	return pt + lo;
 }
 
-uint get_light_stats_addr(uint cluster, uint light, uint side)
-{
-	uint addr = cluster;
-	addr = addr * global_ubo.num_static_lights + light;
-	addr = addr * 6 + side;
-	addr = addr * 2;
-	return addr;
-}
-
 void
 sample_polygonal_lights(
 		uint list_idx,
@@ -275,21 +268,10 @@ sample_polygonal_lights(
 
 		// Apply CDF adjustment based on light shadowing statistics from one of the previous frames.
 		// See comments in function `get_direct_illumination` in `path_tracer_rgen.h`
-		if(global_ubo.pt_light_stats != 0 
-			&& m > 0 
-			&& current_idx < global_ubo.num_static_lights)
+		if(m > 0 && current_idx < global_ubo.num_static_lights)
 		{
-			uint buffer_idx = global_ubo.current_frame_idx;
-			// Regular pixels get shadowing stats from the previous frame;
-			// Gradient pixels get the stats from two frames ago because they need to match
-			// the light sampling from the previous frame.
-			buffer_idx += is_gradient ? (NUM_LIGHT_STATS_BUFFERS - 2) : (NUM_LIGHT_STATS_BUFFERS - 1);
-			buffer_idx = buffer_idx % NUM_LIGHT_STATS_BUFFERS;
-
-			uint addr = get_light_stats_addr(list_idx, current_idx, get_primary_direction(n));
-
-			uint num_hits = light_stats_buffers[buffer_idx].stats[addr];
-			uint num_misses = light_stats_buffers[buffer_idx].stats[addr + 1];
+			uint num_hits, num_misses;
+			light_stats_get(list_idx, current_idx, n, is_gradient, num_hits, num_misses);
 			uint num_total = num_hits + num_misses;
 
 			if(num_total > 0)
