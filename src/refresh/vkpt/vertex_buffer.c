@@ -1520,7 +1520,7 @@ VkResult vkpt_light_buffers_create(bsp_mesh_t *bsp_mesh)
 	}
 	Com_DDPrintf("light stats buffers: %zu bytes\n", sizeof(uint32_t) * num_stats * NUM_LIGHT_STATS_BUFFERS);
 
-	assert(NUM_LIGHT_STATS_BUFFERS == 3);
+	static_assert(NUM_LIGHT_STATS_BUFFERS == 3);
 
 	VkDescriptorBufferInfo light_stats_buf_info[] = { {
 			.buffer = qvk.buf_light_stats[0].buffer,
