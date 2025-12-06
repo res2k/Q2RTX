@@ -55,6 +55,7 @@ qhandle_t   cl_mod_heatbeam;
 qhandle_t   cl_mod_explo4_big;
 
 extern cvar_t* cvar_pt_particle_emissive;
+static cvar_t *cl_testflare;
 
 qhandle_t   cl_img_flare;
 
@@ -70,6 +71,10 @@ static int                  cl_num_footsteps;
 static qhandle_t            cl_last_footstep;
 
 extern mtexinfo_t nulltexinfo;
+
+// used by flare search
+extern int         r_numentities;
+extern entity_t    r_entities[MAX_ENTITIES];
 
 /*
 =================
@@ -507,6 +512,30 @@ static void CL_AddExplosionLight(explosion_t *ex, float phase)
 	V_AddSphereLight(origin, 500.f, color[0], color[1], color[2], radius);
 }
 
+static void add_flare(const vec3_t origin, const vec3_t color, float alpha, int entnum)
+{
+    entity_t ent;
+    memset(&ent, 0, sizeof(ent));
+
+    VectorCopy(origin, ent.origin);
+    ent.alpha = alpha;
+    ent.skin = cl_img_flare;
+    ent.scale = 1;
+    ent.flags = RF_FLARE | RF_TRANSLUCENT;
+    ent.rgba.u8[0] = Q_clip_uint8(color[0] * 255);
+    ent.rgba.u8[1] = Q_clip_uint8(color[1] * 255);
+    ent.rgba.u8[2] = Q_clip_uint8(color[2] * 255);
+    ent.rgba.u8[3] = 255;
+    ent.skinnum = entnum;
+    V_AddEntity(&ent);
+}
+
+#if USE_DEBUG
+#define ENABLE_FLARE    cl_testflare->integer
+#else
+#define ENABLE_FLARE    false
+#endif
+
 static void CL_AddExplosions(void)
 {
     entity_t    *ent;
@@ -593,6 +622,21 @@ static void CL_AddExplosions(void)
             V_AddLight(ent->origin, ex->light * ent->alpha,
                        ex->lightcolor[0], ex->lightcolor[1], ex->lightcolor[2]);
 		}
+
+        if (ex->type == ex_flare && ENABLE_FLARE && cl_img_flare != 0 && ent->alpha > 0)
+        {
+            bool has_flare = false;
+            for (int e = 0; e < r_numentities; e++)
+            {
+                if (r_entities[e].flags & RF_FLARE && r_entities[e].skinnum == ex->ent.id)
+                {
+                    has_flare = true;
+                    break;
+                }
+            }
+            if (!has_flare)
+                add_flare(ex->ent.origin, ex->lightcolor, ent->alpha, ex->ent.id);
+        }
 
         if (ex->type != ex_light) {
             VectorCopy(ent->origin, ent->oldorigin);
@@ -1421,6 +1465,7 @@ void CL_ParseTEnt(void)
 			ex->lightcolor[0] = 1;
 			ex->lightcolor[1] = 1;
 			ex->type = ex_flare;
+			ex->ent.id = te.entity1;
 			break;
         }
         ex->start = cl.servertime - CL_FRAMETIME;
@@ -1751,5 +1796,9 @@ void CL_InitTEnts(void)
     cl_railspiral_color->generator = Com_Color_g;
     cl_railspiral_color_changed(cl_railspiral_color);
     cl_railspiral_radius = Cvar_Get("cl_railspiral_radius", "3", 0);
+
+#if USE_DEBUG
+    cl_testflare = Cvar_Get("cl_testflare", "0", 0);
+#endif
 }
 
