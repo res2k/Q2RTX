@@ -1259,8 +1259,8 @@ vkpt_pt_create_pipelines()
 		SHADER_STAGE(QVK_MOD_PATH_TRACER_BEAM_RAHIT,          VK_SHADER_STAGE_ANY_HIT_BIT_KHR),
 		SHADER_STAGE(QVK_MOD_PATH_TRACER_BEAM_RINT,           VK_SHADER_STAGE_INTERSECTION_BIT_KHR),
 	};
-	const unsigned num_base_shader_stages = 5;
-	const unsigned num_transparent_no_beam_shader_stages = 8;
+	const unsigned num_base_shader_stages = 4;
+	const unsigned num_transparent_no_beam_shader_stages = 7;
 
 	for (pipeline_index_t index = 0; index < PIPELINE_COUNT; index++)
 	{
