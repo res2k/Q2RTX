@@ -515,6 +515,7 @@ vkpt_pt_create_accel_bottom(
 
 		// Create the acceleration structure
 		qvkCreateAccelerationStructureKHR(qvk.device, &createInfo, NULL, &blas->accel);
+		ATTACH_LABEL_VARIABLE_NAME(blas->accel, ACCELERATION_STRUCTURE_KHR, va("blas: %s", debug_label));
 
 		blas->match.fast_build = fast_build;
 		blas->match.vertex_count = num_vertices_to_allocate;
@@ -644,6 +645,7 @@ vkpt_pt_create_accel_bottom_aabb(
 
 		// Create the acceleration structure
 		qvkCreateAccelerationStructureKHR(qvk.device, &createInfo, NULL, &blas->accel);
+		ATTACH_LABEL_VARIABLE_NAME(blas->accel, ACCELERATION_STRUCTURE_KHR, va("blas: %s", debug_label));
 
 		blas->match.fast_build = fast_build;
 		blas->match.vertex_count = 0;
@@ -796,7 +798,7 @@ void vkpt_pt_instance_model_blas(const model_geometry_t* geom, const mat4 transf
 }
 
 static void
-build_tlas(accel_build_batch_t *batch, accel_struct_t* as, VkDeviceAddress instance_data, uint32_t num_instances)
+build_tlas(accel_build_batch_t *batch, accel_struct_t* as, VkDeviceAddress instance_data, uint32_t num_instances, const char* debug_label)
 {
 	assert(batch->numBuilds < MAX_BATCH_ACCEL_BUILDS);
 	uint32_t buildIdx = batch->numBuilds++;
@@ -840,7 +842,7 @@ build_tlas(accel_build_batch_t *batch, accel_struct_t* as, VkDeviceAddress insta
 		buffer_create(&as->mem, sizeInfo.accelerationStructureSize,
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		buffer_attach_name(&as->mem, "tlas");
+		buffer_attach_name(&as->mem, va("tlas: %s", debug_label));
 
 		// Create TLAS
 		// Create acceleration structure
@@ -853,6 +855,7 @@ build_tlas(accel_build_batch_t *batch, accel_struct_t* as, VkDeviceAddress insta
 
 		// Create the acceleration structure
 		qvkCreateAccelerationStructureKHR(qvk.device, &createInfo, NULL, &as->accel);
+		ATTACH_LABEL_VARIABLE_NAME(as->accel, ACCELERATION_STRUCTURE_KHR, va("tlas: %s", debug_label));
 
 		as->match.fast_build = true;
 		as->match.index_count = 0;
@@ -933,8 +936,8 @@ vkpt_pt_create_toplevel(VkCommandBuffer cmd_buf, int idx, const EntityUploadInfo
 	accel_build_batch_t batch = { 0 };
 
 	scratch_buf_ptr = 0;
-	build_tlas(&batch, &tlas_geometry[idx], buf_instances[idx].address, num_instances_geometry);
-	build_tlas(&batch, &tlas_effects[idx], buf_instances[idx].address + num_instances_geometry * sizeof(QvkGeometryInstance_t), num_instances_effects);
+	build_tlas(&batch, &tlas_geometry[idx], buf_instances[idx].address, num_instances_geometry, "geometry");
+	build_tlas(&batch, &tlas_effects[idx], buf_instances[idx].address + num_instances_geometry * sizeof(QvkGeometryInstance_t), num_instances_effects, "effects");
 
 	qvkCmdBuildAccelerationStructuresKHR(cmd_buf, batch.numBuilds, batch.buildInfos, batch.rangeInfoPtrs);
 
