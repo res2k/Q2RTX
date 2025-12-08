@@ -37,6 +37,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 struct
 {
 	size_t vertex_position_host_offset;
+	size_t sprite_position_host_offset;
 	size_t beam_aabb_host_offset;
 	size_t particle_color_host_offset;
 	size_t beam_color_host_offset;
@@ -196,7 +197,8 @@ void update_transparency(VkCommandBuffer command_buffer, const float* view_matri
 	const size_t sprite_vertices_size = sprite_num * (4 * TR_POSITION_SIZE);
 
 	transparency.vertex_position_host_offset = 0;
-	transparency.particle_color_host_offset = transparency.vertex_position_host_offset + particle_vertices_size + sprite_vertices_size;
+	transparency.sprite_position_host_offset = transparency.vertex_position_host_offset + particle_vertices_size;
+	transparency.particle_color_host_offset = transparency.sprite_position_host_offset + sprite_vertices_size;
 	transparency.sprite_info_host_offset = transparency.particle_color_host_offset + particle_num * TR_COLOR_SIZE;
 	transparency.beam_aabb_host_offset = transparency.sprite_info_host_offset + sprite_num * TR_SPRITE_INFO_SIZE;
 	transparency.beam_color_host_offset = transparency.beam_aabb_host_offset + beam_num * TR_BEAM_AABB_SIZE;
@@ -622,8 +624,7 @@ static void write_sprite_geometry(const float* view_matrix, const entity_t* enti
 	// TODO: remove vkpt_refdef.fd, it's better to calculate it from the view matrix
 	const vec3_t view_origin = { vkpt_refdef.fd->vieworg[0], vkpt_refdef.fd->vieworg[1], vkpt_refdef.fd->vieworg[2] };
 
-	const size_t particle_vertex_data_size = transparency.particle_num * 4 * TR_POSITION_SIZE;
-	const size_t sprite_vertex_offset = transparency.vertex_position_host_offset + particle_vertex_data_size;
+	const size_t sprite_vertex_offset = transparency.sprite_position_host_offset;
 
 	// TODO: use better alignment?
 	vec3_t* vertex_positions = (vec3_t*)(transparency.host_buffer_shadow + sprite_vertex_offset);
