@@ -119,6 +119,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 	SHADER_MODULE_DO(QVK_MOD_PATH_TRACER_RMISS)                      \
 	SHADER_MODULE_DO(QVK_MOD_PATH_TRACER_EXPLOSION_RAHIT)            \
 	SHADER_MODULE_DO(QVK_MOD_PATH_TRACER_SPRITE_RAHIT)               \
+	SHADER_MODULE_DO(QVK_MOD_PATH_TRACER_FLARE_RAHIT)                \
 
 
 #define SHADER_STAGE(_module, _stage) \
@@ -746,6 +747,7 @@ void update_transparency(VkCommandBuffer command_buffer, const float* view_matri
 typedef enum {
 	VKPT_TRANSPARENCY_PARTICLES,
 	VKPT_TRANSPARENCY_SPRITES,
+	VKPT_TRANSPARENCY_FLARES,
 
 	VKPT_TRANSPARENCY_COUNT
 } vkpt_transparency_t;
@@ -767,7 +769,8 @@ VkBufferView get_transparency_particle_color_buffer_view(void);
 VkBufferView get_transparency_beam_color_buffer_view(void);
 VkBufferView get_transparency_sprite_info_buffer_view(void);
 VkBufferView get_transparency_beam_intersect_buffer_view(void);
-void get_transparency_counts(int* particle_num, int* beam_num, int* sprite_num);
+VkBufferView get_transparency_flare_info_buffer_view(void);
+void get_transparency_counts(int* particle_num, int* beam_num, int* sprite_num, int* flare_num);
 void vkpt_build_beam_lights(light_poly_t* light_list, int* num_lights, int max_lights, bsp_t *bsp, entity_t* entities, int num_entites, float adapted_luminance);
 bool vkpt_build_cylinder_light(light_poly_t* light_list, int* num_lights, int max_lights, bsp_t *bsp, vec3_t begin, vec3_t end, vec3_t color, float radius);
 bool get_triangle_off_center(const float* positions, float* center, float* anti_center, float offset);

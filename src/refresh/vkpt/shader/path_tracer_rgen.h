@@ -367,18 +367,17 @@ void find_fog_volumes(inout RayPayloadEffects rp, Ray ray)
 }
 
 vec4
-trace_effects_ray(Ray ray, bool skip_procedural)
+trace_effects_ray_common(Ray ray, float t_solid, uint instance_mask, bool skip_procedural)
 {
 	uint rayFlags = 0;
 	if (skip_procedural)
 		rayFlags |= gl_RayFlagsSkipProceduralPrimitives;
 	
-	uint instance_mask = AS_FLAG_EFFECTS;
-
 	ray_payload_effects.transparency = uvec2(0);
 	ray_payload_effects.distances = 0;
 	ray_payload_effects.fog1 = uvec4(0);
 	ray_payload_effects.fog2 = uvec4(0);
+	ray_payload_effects.t_solid = t_solid;
 #ifndef KHR_RAY_QUERY
 	ray_payload_effects.rayTmax = ray.t_max;
 #endif
@@ -441,10 +440,14 @@ trace_effects_ray(Ray ray, bool skip_procedural)
 			case SBTO_SPRITE: // sprites
 				transparent = pt_logic_sprite(primitiveID, bary);
 				break;
+
+			case SBTO_FLARE: // flares
+				transparent = pt_logic_flare(ray_payload_effects, primitiveID, bary, hitT);
+				break;
 			}
 		}
 
-		if (transparent.a > 0)
+		if (transparent.a > 0 || sbtOffset == SBTO_FLARE)
 		{
 			update_payload_transparency(ray_payload_effects, transparent, hitT);
 		}
@@ -462,6 +465,20 @@ trace_effects_ray(Ray ray, bool skip_procedural)
 		return get_payload_transparency(ray_payload_effects);
 
 	return get_payload_transparency_with_fog(ray_payload_effects, ray.t_max);
+}
+
+vec4
+trace_effects_ray(Ray ray, bool skip_procedural)
+{
+	return trace_effects_ray_common(ray, ray.t_max, AS_FLAG_EFFECTS, skip_procedural);
+}
+
+vec4
+trace_flares_ray(Ray ray, bool skip_procedural)
+{
+	float t_solid = ray.t_max;
+	ray.t_max = PRIMARY_RAY_T_MAX;
+	return trace_effects_ray_common(ray, t_solid, AS_FLAG_FLARE, skip_procedural);
 }
 
 Ray get_shadow_ray(vec3 p1, vec3 p2, float tmin)

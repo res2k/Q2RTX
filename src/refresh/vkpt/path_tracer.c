@@ -30,6 +30,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define RAY_GEN_BEAM_COLOR_BUFFER_BINDING_IDX 2
 #define RAY_GEN_SPRITE_INFO_BUFFER_BINDING_IDX 3
 #define RAY_GEN_BEAM_INTERSECT_BUFFER_BINDING_IDX 4
+#define RAY_GEN_FLARE_INFO_BUFFER_BINDING_IDX 5
 
 #define SIZE_SCRATCH_BUFFER (1 << 25)
 
@@ -86,6 +87,7 @@ static accel_struct_t             blas_explosions[MAX_FRAMES_IN_FLIGHT];
 static accel_struct_t             blas_particles[MAX_FRAMES_IN_FLIGHT];
 static accel_struct_t             blas_beams[MAX_FRAMES_IN_FLIGHT];
 static accel_struct_t             blas_sprites[MAX_FRAMES_IN_FLIGHT];
+static accel_struct_t             blas_flares[MAX_FRAMES_IN_FLIGHT];
 
 static accel_struct_t             tlas_geometry[MAX_FRAMES_IN_FLIGHT];
 static accel_struct_t             tlas_effects[MAX_FRAMES_IN_FLIGHT];
@@ -101,6 +103,7 @@ static VkPipeline            rt_pipelines[PIPELINE_COUNT];
 cvar_t*                      cvar_pt_enable_particles = NULL;
 cvar_t*                      cvar_pt_enable_beams = NULL;
 cvar_t*                      cvar_pt_enable_sprites = NULL;
+cvar_t*                      cvar_pt_enable_flares = NULL;
 
 extern cvar_t *cvar_pt_caustics;
 extern cvar_t *cvar_pt_reflect_refract;
@@ -208,6 +211,12 @@ vkpt_pt_init()
 			.descriptorCount = 1,
 			.stageFlags      = qvk.use_ray_query ? VK_SHADER_STAGE_COMPUTE_BIT : VK_SHADER_STAGE_INTERSECTION_BIT_KHR,
 		},
+		{
+			.binding         = RAY_GEN_FLARE_INFO_BUFFER_BINDING_IDX,
+			.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+			.descriptorCount = 1,
+			.stageFlags      = qvk.use_ray_query ? VK_SHADER_STAGE_COMPUTE_BIT : VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+		},
 	};
 
 	VkDescriptorSetLayoutCreateInfo layout_info = {
@@ -274,6 +283,7 @@ vkpt_pt_init()
 	cvar_pt_enable_particles = Cvar_Get("pt_enable_particles", "1", 0);
 	cvar_pt_enable_beams = Cvar_Get("pt_enable_beams", "1", 0);
 	cvar_pt_enable_sprites= Cvar_Get("pt_enable_sprites", "1", 0);
+	cvar_pt_enable_flares = Cvar_Get("pt_enable_sprites", "1", 0);
 
 	return VK_SUCCESS;
 }
@@ -297,6 +307,7 @@ vkpt_pt_update_descripter_set_bindings(int idx)
 	VkBufferView beam_color_buffer_view = get_transparency_beam_color_buffer_view();
 	VkBufferView sprite_info_buffer_view = get_transparency_sprite_info_buffer_view();
 	VkBufferView beam_intersect_buffer_view = get_transparency_beam_intersect_buffer_view();
+	VkBufferView flare_info_buffer_view = get_transparency_flare_info_buffer_view();
 
 	VkWriteDescriptorSet writes[] = {
 		{
@@ -339,6 +350,14 @@ vkpt_pt_update_descripter_set_bindings(int idx)
 			.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
 			.pTexelBufferView = &beam_intersect_buffer_view
 		},
+		{
+			.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet          = rt_descriptor_set[idx],
+			.dstBinding      = RAY_GEN_FLARE_INFO_BUFFER_BINDING_IDX,
+			.descriptorCount = 1,
+			.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+			.pTexelBufferView = &flare_info_buffer_view
+		},
 	};
 
 	vkUpdateDescriptorSets(qvk.device, LENGTH(writes), writes, 0, NULL);
@@ -374,6 +393,7 @@ static void vkpt_pt_destroy_dynamic(int idx)
 	destroy_accel_struct(&blas_particles[idx]);
 	destroy_accel_struct(&blas_beams[idx]);
 	destroy_accel_struct(&blas_sprites[idx]);
+	destroy_accel_struct(&blas_flares[idx]);
 }
 
 static inline int accel_matches(accel_match_info_t *match,
@@ -726,6 +746,9 @@ vkpt_pt_create_all_dynamic(
 	vkpt_get_transparency_buffers(VKPT_TRANSPARENCY_SPRITES, &buffer_vertex, &offset_vertex, &buffer_index, &offset_index, &num_vertices, &num_indices);
 	vkpt_pt_create_accel_bottom(&batch, buffer_vertex, offset_vertex, buffer_index, offset_index, num_vertices, num_indices, blas_sprites + idx, true, true, "sprites");
 
+	vkpt_get_transparency_buffers(VKPT_TRANSPARENCY_FLARES, &buffer_vertex, &offset_vertex, &buffer_index, &offset_index, &num_vertices, &num_indices);
+	vkpt_pt_create_accel_bottom(&batch, buffer_vertex, offset_vertex, buffer_index, offset_index, num_vertices, num_indices, blas_flares + idx, true, true, "flares");
+
 	qvkCmdBuildAccelerationStructuresKHR(cmd_buf, batch.numBuilds, batch.buildInfos, batch.rangeInfoPtrs);
 
 	MEM_BARRIER_BUILD_ACCEL(cmd_buf);
@@ -925,6 +948,12 @@ vkpt_pt_create_toplevel(VkCommandBuffer cmd_buf, int idx, const EntityUploadInfo
 			AS_FLAG_EFFECTS, VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR, SBTO_SPRITE);
 	}
 
+	if (cvar_pt_enable_flares->integer != 0)
+	{
+		append_blas(g_instances, &g_num_instances, &blas_flares[idx], 0, 0,
+			AS_FLAG_FLARE, VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR, SBTO_FLARE);
+	}
+
 	uint32_t num_instances_effects = g_num_instances - num_instances_geometry;
 	
 	void *instance_data = buffer_map(buf_instances + idx);
@@ -1038,6 +1067,16 @@ vkpt_pt_trace_primary_rays(VkCommandBuffer cmd_buf)
 	
 	BUFFER_BARRIER(cmd_buf,
 			.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+			.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+			.buffer = qvk.buf_readback.buffer,
+			.offset = 0,
+			.size = VK_WHOLE_SIZE,
+	);
+
+	vkCmdFillBuffer(cmd_buf, qvk.buf_readback.buffer, 0, VK_WHOLE_SIZE, 0);
+
+	BUFFER_BARRIER(cmd_buf,
+			.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
 			.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
 			.buffer = qvk.buf_readback.buffer,
 			.offset = 0,
@@ -1258,12 +1297,13 @@ vkpt_pt_create_pipelines()
 		SHADER_STAGE(QVK_MOD_PATH_TRACER_PARTICLE_RAHIT,      VK_SHADER_STAGE_ANY_HIT_BIT_KHR),
 		SHADER_STAGE(QVK_MOD_PATH_TRACER_EXPLOSION_RAHIT,     VK_SHADER_STAGE_ANY_HIT_BIT_KHR),
 		SHADER_STAGE(QVK_MOD_PATH_TRACER_SPRITE_RAHIT,        VK_SHADER_STAGE_ANY_HIT_BIT_KHR),
+		SHADER_STAGE(QVK_MOD_PATH_TRACER_FLARE_RAHIT,         VK_SHADER_STAGE_ANY_HIT_BIT_KHR),
 		// Must be last
 		SHADER_STAGE(QVK_MOD_PATH_TRACER_BEAM_RAHIT,          VK_SHADER_STAGE_ANY_HIT_BIT_KHR),
 		SHADER_STAGE(QVK_MOD_PATH_TRACER_BEAM_RINT,           VK_SHADER_STAGE_INTERSECTION_BIT_KHR),
 	};
 	const unsigned num_base_shader_stages = 4;
-	const unsigned num_transparent_no_beam_shader_stages = 7;
+	const unsigned num_transparent_no_beam_shader_stages = 8;
 
 	for (pipeline_index_t index = 0; index < PIPELINE_COUNT; index++)
 	{
@@ -1395,13 +1435,21 @@ vkpt_pt_create_pipelines()
 					.anyHitShader       = 6,
 					.intersectionShader = VK_SHADER_UNUSED_KHR
 				},
+				[SBT_RAHIT_FLARE] = {
+					.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
+					.type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR,
+					.generalShader      = VK_SHADER_UNUSED_KHR,
+					.closestHitShader   = VK_SHADER_UNUSED_KHR,
+					.anyHitShader       = 7,
+					.intersectionShader = VK_SHADER_UNUSED_KHR
+				},
 				[SBT_RINT_BEAM] = {
 					.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
 					.type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR,
 					.generalShader      = VK_SHADER_UNUSED_KHR,
 					.closestHitShader   = VK_SHADER_UNUSED_KHR,
-					.anyHitShader       = 7,
-					.intersectionShader = 8
+					.anyHitShader       = 8,
+					.intersectionShader = 9
 				}
 			};
 

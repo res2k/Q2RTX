@@ -114,6 +114,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define MAX_TLAS_INSTANCES       (MAX_MODEL_INSTANCES + MAX_RESERVED_INSTANCES)
 #define MAX_LIGHT_SOURCES        32
 #define MAX_LIGHT_STYLES         64
+#define MAX_FLARES               2048 // MAX_ENTITIES
 
 #define TLAS_INDEX_GEOMETRY      0
 #define TLAS_INDEX_EFFECTS       1
@@ -129,6 +130,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 // Effects TLAS flags
 #define AS_FLAG_EFFECTS         (1 << 0)
+#define AS_FLAG_FLARE           (1 << 1)
 
 #define RT_PAYLOAD_GEOMETRY      0
 #define RT_PAYLOAD_EFFECTS       1
@@ -143,8 +145,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define SBT_RAHIT_PARTICLE       5
 #define SBT_RAHIT_EXPLOSION      6
 #define SBT_RAHIT_SPRITE         7
-#define SBT_RINT_BEAM            8
-#define SBT_ENTRIES_PER_PIPELINE 9
+#define SBT_RAHIT_FLARE          8
+#define SBT_RINT_BEAM            9
+#define SBT_ENTRIES_PER_PIPELINE 10
 // vkpt_pt_create_pipelines() relies on all 'transparency' SBT entries coming after SBT_FIRST_TRANSPARENCY
 #define SBT_FIRST_TRANSPARENCY SBT_RCHIT_EFFECTS
 
@@ -155,6 +158,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define SBTO_PARTICLE   (SBT_RAHIT_PARTICLE - SBT_RCHIT_EFFECTS)
 #define SBTO_EXPLOSION  (SBT_RAHIT_EXPLOSION - SBT_RCHIT_EFFECTS)
 #define SBTO_SPRITE     (SBT_RAHIT_SPRITE - SBT_RCHIT_EFFECTS)
+#define SBTO_FLARE      (SBT_RAHIT_FLARE - SBT_RCHIT_EFFECTS)
 #define SBTO_BEAM       (SBT_RINT_BEAM - SBT_RCHIT_EFFECTS)
 
 #ifndef M_PI

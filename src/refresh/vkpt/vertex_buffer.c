@@ -1321,7 +1321,7 @@ vkpt_vertex_buffer_create()
 	}
 
 	buffer_create(&qvk.buf_readback, sizeof(ReadbackBuffer),
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	buffer_attach_name(&qvk.buf_readback, "readback");
 

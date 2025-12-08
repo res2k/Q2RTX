@@ -29,6 +29,9 @@ uniform utextureBuffer sprite_texure_buffer;
 layout(set = 0, binding = 4)
 uniform utextureBuffer beam_info_buffer;
 
+layout(set = 0, binding = 5)
+uniform utextureBuffer flare_texture_buffer;
+
 void get_model_index_and_prim_offset(int instanceID, int geometryIndex, out int model_index, out uint prim_offset)
 {
 	model_index = instance_buffer.tlas_instance_model_indices[instanceID];
@@ -163,6 +166,37 @@ vec4 pt_logic_sprite(int primitiveID, vec2 bary)
 
 		color.rgb *= global_ubo.prev_adapted_luminance * 2000;
 	}
+
+	return color;
+}
+
+vec4 pt_logic_flare(RayPayloadEffects ray_payload, int primitiveID, vec2 bary, float t_hit)
+{
+	const vec3 barycentric = vec3(1.0 - bary.x - bary.y, bary.x, bary.y);
+
+	vec2 uv;
+	if((primitiveID & 1) == 0)
+		uv = vec2(0.0, 1.0) * barycentric.x + vec2(0.0, 0.0) * barycentric.y + vec2(1.0, 0.0) * barycentric.z;
+	else
+		uv = vec2(1.0, 0.0) * barycentric.x + vec2(1.0, 1.0) * barycentric.y + vec2(0.0, 1.0) * barycentric.z;
+
+	// "distance" used to check if flare is occluded (should roughly match what GL uses)
+	float occlusion_dist = max(abs(uv.x - 0.5), abs(uv.y - 0.5)) * 2;
+
+	uvec4 info = texelFetch(flare_texture_buffer, primitiveID / 2);
+
+	uint texture_index = info.x >> 16;
+	const uint flare_index = info.x & 0xffff;
+	float alpha = uintBitsToFloat(info.z);
+	vec4 flare_color = unpackUnorm4x8(info.y);
+	vec4 color = global_textureLod(texture_index, uv, 0);
+
+	color.rgb = color.rgb * flare_color.rgb * alpha * global_ubo.prev_adapted_luminance * 10;
+
+	if (t_hit < ray_payload.t_solid && occlusion_dist < 0.1)
+		atomicAdd(readback.flare_visible[flare_index], 1);
+
+	color.a = 0; // additive blending
 
 	return color;
 }

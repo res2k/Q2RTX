@@ -26,6 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define TR_PARTICLE_MAX_NUM    MAX_PARTICLES
 #define TR_BEAM_MAX_NUM        MAX_ENTITIES
 #define TR_SPRITE_MAX_NUM      MAX_ENTITIES
+#define TR_FLARE_MAX_NUM       MAX_ENTITIES
 #define TR_VERTEX_MAX_NUM      ((TR_PARTICLE_MAX_NUM + TR_SPRITE_MAX_NUM) * 4)
 #define TR_INDEX_MAX_NUM       ((TR_PARTICLE_MAX_NUM + TR_SPRITE_MAX_NUM) * 6)
 #define TR_BEAM_AABB_SIZE      sizeof(VkAabbPositionsKHR)
@@ -33,26 +34,31 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define TR_COLOR_SIZE          (4 * sizeof(float))
 #define TR_BEAM_INTERSECT_SIZE (12 * sizeof(float))
 #define TR_SPRITE_INFO_SIZE    (2 * sizeof(float))
+#define TR_FLARE_INFO_SIZE     (sizeof(float) + 2 * sizeof(uint32_t))
 
 struct
 {
 	size_t vertex_position_host_offset;
 	size_t sprite_position_host_offset;
+	size_t flare_position_host_offset;
 	size_t beam_aabb_host_offset;
 	size_t particle_color_host_offset;
 	size_t beam_color_host_offset;
 	size_t sprite_info_host_offset;
+	size_t flare_info_host_offset;
 	size_t current_upload_size;
 
 	size_t beam_intersect_host_offset;
 
 	size_t sprite_vertex_device_offset;
+	size_t flare_vertex_device_offset;
 
 	size_t host_buffer_size;
 	size_t host_frame_size;
 	unsigned int particle_num;
 	unsigned int beam_num;
 	unsigned int sprite_num;
+	unsigned int flare_num;
 	unsigned int host_frame_index;
 	unsigned int host_buffered_frame_num;
 	char* mapped_host_buffer;
@@ -64,13 +70,15 @@ struct
 	BufferResource_t beam_color_buffer;
 	BufferResource_t sprite_info_buffer;
 	BufferResource_t beam_intersect_buffer;
+	BufferResource_t flare_info_buffer;
 	VkBufferView particle_color_buffer_view;
 	VkBufferView beam_color_buffer_view;
 	VkBufferView sprite_info_buffer_view;
 	VkBufferView beam_intersect_buffer_view;
+	VkBufferView flare_info_buffer_view;
 	VkBuffer host_buffer;
 	VkDeviceMemory host_buffer_memory;
-	VkBufferMemoryBarrier transfer_barriers[6];
+	VkBufferMemoryBarrier transfer_barriers[7];
 } transparency;
 
 // initialization
@@ -83,6 +91,7 @@ static void fill_index_buffer(void);
 static void write_particle_geometry(const float* view_matrix, const particle_t* particles, int particle_num);
 static void write_beam_geometry(const entity_t* entities, int entity_num);
 static void write_sprite_geometry(const float* view_matrix, const entity_t* entities, int entity_num);
+static void write_flare_geometry(const float* view_matrix, const entity_t* entities, int entity_num);
 static void upload_geometry(VkCommandBuffer command_buffer);
 
 cvar_t* cvar_pt_particle_size = NULL;
@@ -124,9 +133,13 @@ bool initialize_transparency()
 	const size_t sprite_vertex_position_max_size = TR_SPRITE_MAX_NUM * TR_POSITION_SIZE;
 	const size_t sprite_info_size = TR_SPRITE_MAX_NUM * TR_SPRITE_INFO_SIZE;
 	const size_t sprite_data_size = sprite_vertex_position_max_size + sprite_info_size;
+
+	const size_t flare_vertex_position_max_size = TR_FLARE_MAX_NUM * TR_POSITION_SIZE;
+	const size_t flare_info_size = TR_FLARE_MAX_NUM * TR_FLARE_INFO_SIZE;
+	const size_t flare_data_size = flare_vertex_position_max_size + flare_info_size;
 	
 	transparency.host_buffered_frame_num = MAX_FRAMES_IN_FLIGHT;
-	transparency.host_frame_size = particle_data_size + beam_data_size + sprite_data_size;
+	transparency.host_frame_size = particle_data_size + beam_data_size + sprite_data_size + flare_data_size;
 	transparency.host_buffer_size = transparency.host_buffered_frame_num * transparency.host_frame_size;
 
 	create_buffers();
@@ -146,6 +159,7 @@ void destroy_transparency()
 	vkDestroyBufferView(qvk.device, transparency.beam_color_buffer_view, NULL);
 	vkDestroyBufferView(qvk.device, transparency.sprite_info_buffer_view, NULL);
 	vkDestroyBufferView(qvk.device, transparency.beam_intersect_buffer_view, NULL);
+	vkDestroyBufferView(qvk.device, transparency.flare_info_buffer_view, NULL);
 	buffer_destroy(&transparency.vertex_buffer);
 	buffer_destroy(&transparency.index_buffer);
 	buffer_destroy(&transparency.beam_aabb_buffer);
@@ -153,6 +167,7 @@ void destroy_transparency()
 	buffer_destroy(&transparency.beam_color_buffer);
 	buffer_destroy(&transparency.sprite_info_buffer);
 	buffer_destroy(&transparency.beam_intersect_buffer);
+	buffer_destroy(&transparency.flare_info_buffer);
 
 	vkDestroyBuffer(qvk.device, transparency.host_buffer, NULL);
 	vkFreeMemory(qvk.device, transparency.host_buffer_memory, NULL);
@@ -171,6 +186,7 @@ void update_transparency(VkCommandBuffer command_buffer, const float* view_matri
 
 	uint32_t beam_num = 0;
 	uint32_t sprite_num = 0;
+	uint32_t flare_num = 0;
 	for (int i = 0; i < entity_num; i++)
 	{
 		if (entities[i].flags & RF_BEAM)
@@ -178,6 +194,10 @@ void update_transparency(VkCommandBuffer command_buffer, const float* view_matri
 			// write_beam_geometry skips zero-width beams as well
 			if(entities[i].frame > 0)
 				++beam_num;
+		}
+		else if (entities[i].flags & RF_FLARE)
+		{
+			++flare_num;
 		}
 		else if ((entities[i].model & 0x80000000) == 0)
 		{
@@ -188,28 +208,34 @@ void update_transparency(VkCommandBuffer command_buffer, const float* view_matri
 	}
 	beam_num = min(beam_num, TR_BEAM_MAX_NUM);
 	sprite_num = min(sprite_num, TR_SPRITE_MAX_NUM);
+	flare_num = min(flare_num, TR_FLARE_MAX_NUM);
 
 	transparency.beam_num = beam_num;
 	transparency.particle_num = particle_num;
 	transparency.sprite_num = sprite_num;
+	transparency.flare_num = flare_num;
 
 	const size_t particle_vertices_size = particle_num * (4 * TR_POSITION_SIZE);
 	const size_t sprite_vertices_size = sprite_num * (4 * TR_POSITION_SIZE);
+	const size_t flare_vertices_size = flare_num * (4 * TR_POSITION_SIZE);
 
 	transparency.vertex_position_host_offset = 0;
 	transparency.sprite_position_host_offset = transparency.vertex_position_host_offset + particle_vertices_size;
-	transparency.particle_color_host_offset = transparency.sprite_position_host_offset + sprite_vertices_size;
+	transparency.flare_position_host_offset = transparency.sprite_position_host_offset + sprite_vertices_size;
+	transparency.particle_color_host_offset = transparency.flare_position_host_offset + flare_vertices_size;
 	transparency.sprite_info_host_offset = transparency.particle_color_host_offset + particle_num * TR_COLOR_SIZE;
-	transparency.beam_aabb_host_offset = transparency.sprite_info_host_offset + sprite_num * TR_SPRITE_INFO_SIZE;
+	transparency.flare_info_host_offset = transparency.sprite_info_host_offset + sprite_num * TR_SPRITE_INFO_SIZE;
+	transparency.beam_aabb_host_offset = transparency.flare_info_host_offset + flare_num * TR_FLARE_INFO_SIZE;
 	transparency.beam_color_host_offset = transparency.beam_aabb_host_offset + beam_num * TR_BEAM_AABB_SIZE;
 	transparency.beam_intersect_host_offset = transparency.beam_color_host_offset + beam_num * TR_COLOR_SIZE;
 	transparency.current_upload_size = transparency.beam_intersect_host_offset + beam_num * TR_BEAM_INTERSECT_SIZE;
 
-	if (particle_num > 0 || beam_num > 0 || sprite_num > 0)
+	if (particle_num > 0 || beam_num > 0 || sprite_num > 0 || flare_num > 0)
 	{
 		write_particle_geometry(view_matrix, particles, particle_num);
 		write_beam_geometry(entities, entity_num);
 		write_sprite_geometry(view_matrix, entities, entity_num);
+		write_flare_geometry(view_matrix, entities, entity_num);
 		upload_geometry(command_buffer);
 	}
 }
@@ -239,6 +265,12 @@ void vkpt_get_transparency_buffers(
 		*vertex_offset = transparency.sprite_vertex_device_offset;
 		*num_vertices = transparency.sprite_num * 4;
 		*num_indices = transparency.sprite_num * 6;
+		return;
+
+	case VKPT_TRANSPARENCY_FLARES:
+		*vertex_offset = transparency.flare_vertex_device_offset;
+		*num_vertices = transparency.flare_num * 4;
+		*num_indices = transparency.flare_num * 6;
 		return;
 
 	default:
@@ -279,11 +311,17 @@ VkBufferView get_transparency_beam_intersect_buffer_view()
 	return transparency.beam_intersect_buffer_view;
 }
 
-void get_transparency_counts(int* particle_num, int* beam_num, int* sprite_num)
+VkBufferView get_transparency_flare_info_buffer_view()
+{
+	return transparency.flare_info_buffer_view;
+}
+
+void get_transparency_counts(int* particle_num, int* beam_num, int* sprite_num, int* flare_num)
 {
 	*particle_num = transparency.particle_num;
 	*beam_num = transparency.beam_num;
 	*sprite_num = transparency.sprite_num;
+	*flare_num = transparency.flare_num;
 }
 
 static void write_particle_geometry(const float* view_matrix, const particle_t* particles, int particle_num)
@@ -612,17 +650,63 @@ void vkpt_build_beam_lights(light_poly_t* light_list, int* num_lights, int max_l
 	}
 }
 
-static void write_sprite_geometry(const float* view_matrix, const entity_t* entities, int entity_num)
+static void compute_billboard_positions(const float *view_matrix, const vec3_t world_origin, int frame_origin_x, int frame_origin_y, int frame_width, int frame_height, bool vertical, vec3_t *vertex_positions)
 {
-	if (transparency.sprite_num == 0)
-		return;
-
 	const vec3_t view_x = { view_matrix[0], view_matrix[4], view_matrix[8] };
 	const vec3_t view_y = { view_matrix[1], view_matrix[5], view_matrix[9] };
 	const vec3_t world_y = { 0.f, 0.f, 1.f };
 
 	// TODO: remove vkpt_refdef.fd, it's better to calculate it from the view matrix
 	const vec3_t view_origin = { vkpt_refdef.fd->vieworg[0], vkpt_refdef.fd->vieworg[1], vkpt_refdef.fd->vieworg[2] };
+
+	// set up the quad - reference code is in function GL_DrawSpriteModel
+
+	vec3_t up, down, left, right;
+
+	if (cvar_pt_projection->integer == 1)
+	{
+		// make the sprite always face the camera and always vertical in cylindrical projection mode
+
+		vec3_t to_camera;
+		VectorSubtract(view_origin, world_origin, to_camera);
+
+		vec3_t cyl_x;
+		CrossProduct(world_y, to_camera, cyl_x);
+		VectorNormalize(cyl_x);
+
+		VectorScale(cyl_x, frame_origin_x, left);
+		VectorScale(cyl_x, frame_origin_x - frame_width, right);
+
+		VectorScale(world_y, -frame_origin_y, down);
+		VectorScale(world_y, frame_height - frame_origin_y, up);
+	}
+	else
+	{
+		VectorScale(view_x, frame_origin_x, left);
+		VectorScale(view_x, frame_origin_x - frame_width, right);
+
+		if (vertical)
+		{
+			VectorScale(world_y, -frame_origin_y, down);
+			VectorScale(world_y, frame_height - frame_origin_y, up);
+		}
+		else
+		{
+			VectorScale(view_y, -frame_origin_y, down);
+			VectorScale(view_y, frame_height - frame_origin_y, up);
+		}
+	}
+
+	VectorAdd3(world_origin, down, left, vertex_positions[0]);
+	VectorAdd3(world_origin, up, left, vertex_positions[1]);
+	VectorAdd3(world_origin, up, right, vertex_positions[2]);
+	VectorAdd3(world_origin, down, right, vertex_positions[3]);
+}
+
+static void write_sprite_geometry(const float* view_matrix, const entity_t* entities, int entity_num)
+{
+	if (transparency.sprite_num == 0)
+		return;
 
 	const size_t sprite_vertex_offset = transparency.sprite_position_host_offset;
 
@@ -648,48 +732,7 @@ static void write_sprite_geometry(const float* view_matrix, const entity_t* enti
 		sprite_info[0] = image - r_images;
 		memcpy(&sprite_info[1], &e->alpha, sizeof(uint32_t));
 
-		// set up the quad - reference code is in function GL_DrawSpriteModel
-
-		vec3_t up, down, left, right;
-
-		if (cvar_pt_projection->integer == 1)
-		{
-			// make the sprite always face the camera and always vertical in cylindrical projection mode
-
-			vec3_t to_camera;
-			VectorSubtract(view_origin, e->origin, to_camera);
-			
-			vec3_t cyl_x;
-			CrossProduct(world_y, to_camera, cyl_x);
-			VectorNormalize(cyl_x);
-
-			VectorScale(cyl_x, frame->origin_x, left);
-			VectorScale(cyl_x, frame->origin_x - frame->width, right);
-
-			VectorScale(world_y, -frame->origin_y, down);
-			VectorScale(world_y, frame->height - frame->origin_y, up);
-		}
-		else
-		{
-			VectorScale(view_x, frame->origin_x, left);
-			VectorScale(view_x, frame->origin_x - frame->width, right);
-
-			if (model->sprite_vertical)
-			{
-				VectorScale(world_y, -frame->origin_y, down);
-				VectorScale(world_y, frame->height - frame->origin_y, up);
-			}
-			else
-			{
-				VectorScale(view_y, -frame->origin_y, down);
-				VectorScale(view_y, frame->height - frame->origin_y, up);
-			}
-		}
-
-		VectorAdd3(e->origin, down, left, vertex_positions[0]);
-		VectorAdd3(e->origin, up, left, vertex_positions[1]);
-		VectorAdd3(e->origin, up, right, vertex_positions[2]);
-		VectorAdd3(e->origin, down, right, vertex_positions[3]);
+		compute_billboard_positions(view_matrix, e->origin, frame->origin_x, frame->origin_y, frame->width, frame->height, model->sprite_vertical, vertex_positions);
 
 		vertex_positions += 4;
 		sprite_info += TR_SPRITE_INFO_SIZE / sizeof(int);
@@ -699,9 +742,58 @@ static void write_sprite_geometry(const float* view_matrix, const entity_t* enti
 	}
 }
 
+static void write_flare_geometry(const float* view_matrix, const entity_t* entities, int entity_num)
+{
+	if (transparency.flare_num == 0)
+		return;
+
+	/* Some notes on flares:
+	 * - They're rendered as billboards.
+	 * - Since they're supposed to emulate a "lens" effect, they only show up the primary view,
+	 *   but non in reflections. This is done via a different cull mask for flares.
+	 * - For the same reasons, flares are rendering without being obstructed by geometry.
+	 * - GL renderer uses occlusion queries to see if a flare is visible.
+	 *   We simulate that by counting the number of rays that hit a flare that would not be
+	 *   obstructed by geometry; if it's 0, assume the flare to be occluded/invisible.
+	 */
+
+	const size_t flare_vertex_offset = transparency.flare_position_host_offset;
+
+	// TODO: use better alignment?
+	vec3_t* vertex_positions = (vec3_t*)(transparency.host_buffer_shadow + flare_vertex_offset);
+	uint32_t* flare_info = (uint32_t*)(transparency.host_buffer_shadow + transparency.flare_info_host_offset);
+
+	int flare_count = 0;
+	for (int i = 0; i < entity_num; i++)
+	{
+		const entity_t *e = entities + i;
+
+		if ((e->flags & RF_FLARE) == 0)
+			continue;
+
+		int flare_idx = e->skinnum;
+
+		float visibility = qvk.readback.flare_visible[flare_idx] > 0 ? 1.0f : 0.0f;
+		float alpha = e->alpha * visibility;
+		image_t *image = &r_images[e->skin];
+		flare_info[0] = ((uint16_t)(image - r_images) << 16) | flare_idx;
+		flare_info[1] = e->rgba.u32;
+		memcpy(&flare_info[2], &alpha, sizeof(float));
+
+		compute_billboard_positions(view_matrix, e->origin, image->width / 2, image->height / 2, image->width, image->height, false, vertex_positions);
+
+		vertex_positions += 4;
+		flare_info += TR_FLARE_INFO_SIZE / sizeof(uint32_t);
+
+		if (++flare_count >= TR_FLARE_MAX_NUM)
+			return;
+	}
+}
+
 static void upload_geometry(VkCommandBuffer command_buffer)
 {
 	transparency.sprite_vertex_device_offset = transparency.particle_num * 4 * TR_POSITION_SIZE;
+	transparency.flare_vertex_device_offset = transparency.sprite_vertex_device_offset + transparency.sprite_num * 4 * TR_POSITION_SIZE;
 
     const size_t host_buffer_offset = transparency.host_frame_index * transparency.host_frame_size;
 
@@ -712,7 +804,7 @@ static void upload_geometry(VkCommandBuffer command_buffer)
 	const VkBufferCopy vertices = {
 		.srcOffset = host_buffer_offset + transparency.vertex_position_host_offset,
 		.dstOffset = 0,
-		.size = (transparency.particle_num + transparency.sprite_num) * 4 * TR_POSITION_SIZE
+		.size = (transparency.particle_num + transparency.sprite_num + transparency.flare_num) * 4 * TR_POSITION_SIZE
 	};
 
 	const VkBufferCopy beam_aabbs = {
@@ -737,6 +829,12 @@ static void upload_geometry(VkCommandBuffer command_buffer)
 		.srcOffset = host_buffer_offset + transparency.sprite_info_host_offset,
 		.dstOffset = 0,
 		.size = transparency.sprite_num * TR_SPRITE_INFO_SIZE
+	};
+
+	const VkBufferCopy flare_infos = {
+		.srcOffset = host_buffer_offset + transparency.flare_info_host_offset,
+		.dstOffset = 0,
+		.size = transparency.flare_num * TR_FLARE_INFO_SIZE
 	};
 
 	const VkBufferCopy beam_intersect = {
@@ -765,6 +863,10 @@ static void upload_geometry(VkCommandBuffer command_buffer)
 		vkCmdCopyBuffer(command_buffer, transparency.host_buffer, transparency.sprite_info_buffer.buffer,
 			1, &sprite_infos);
 
+	if (flare_infos.size)
+		vkCmdCopyBuffer(command_buffer, transparency.host_buffer, transparency.flare_info_buffer.buffer,
+			1, &flare_infos);
+
 	if (beam_intersect.size)
 		vkCmdCopyBuffer(command_buffer, transparency.host_buffer, transparency.beam_intersect_buffer.buffer,
 			1, &beam_intersect);
@@ -790,6 +892,8 @@ static void upload_geometry(VkCommandBuffer command_buffer)
 	transparency.transfer_barriers[4].size = beam_aabbs.size;
 	transparency.transfer_barriers[5].buffer = transparency.beam_intersect_buffer.buffer;
 	transparency.transfer_barriers[5].size = beam_intersect.size;
+	transparency.transfer_barriers[6].buffer = transparency.flare_info_buffer.buffer;
+	transparency.transfer_barriers[6].size = flare_infos.size;
 }
 
 
@@ -851,6 +955,13 @@ static void create_buffers(void)
 		VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	buffer_attach_name(&transparency.beam_intersect_buffer, "transparency beam intersect buffer");
+
+	buffer_create(
+		&transparency.flare_info_buffer,
+		TR_FLARE_MAX_NUM * TR_FLARE_INFO_SIZE,
+		VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	buffer_attach_name(&transparency.flare_info_buffer, "transparency flare info buffer");
 }
 
 static bool allocate_and_bind_memory_to_buffers(void)
@@ -919,6 +1030,13 @@ static void create_buffer_views(void)
 		.range = TR_BEAM_MAX_NUM * TR_BEAM_INTERSECT_SIZE
 	};
 
+	const VkBufferViewCreateInfo flare_info_view_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+		.buffer = transparency.flare_info_buffer.buffer,
+		.format = VK_FORMAT_R32G32B32_UINT,
+		.range = TR_FLARE_MAX_NUM * TR_FLARE_INFO_SIZE
+	};
+
 	_VK(vkCreateBufferView(qvk.device, &particle_color_view_info, NULL,
 		&transparency.particle_color_buffer_view));
 
@@ -930,6 +1048,10 @@ static void create_buffer_views(void)
 
 	_VK(vkCreateBufferView(qvk.device, &beam_intersect_view_info, NULL,
 		&transparency.beam_intersect_buffer_view));
+
+	_VK(vkCreateBufferView(qvk.device, &flare_info_view_info, NULL,
+		&transparency.flare_info_buffer_view));
+
 }
 
 static void fill_index_buffer(void)

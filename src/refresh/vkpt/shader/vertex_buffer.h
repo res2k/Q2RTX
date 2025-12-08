@@ -132,6 +132,8 @@ BEGIN_SHADER_STRUCT( ReadbackBuffer )
 
 	vec3 hdr_color;
 	float adapted_luminance;
+
+	uint flare_visible[MAX_FLARES];
 }
 END_SHADER_STRUCT( ReadbackBuffer )
 

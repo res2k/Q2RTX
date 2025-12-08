@@ -168,6 +168,7 @@ main()
 	}
 
 	vec4 effects = trace_effects_ray(ray, /* skip_procedural = */ false);
+	effects.rgb += trace_flares_ray(ray, /* skip_procedural = */ true).rgb;
 
 	direction = ray.direction;
 
