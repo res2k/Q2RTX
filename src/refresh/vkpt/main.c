@@ -2480,11 +2480,10 @@ process_render_feedback(ref_feedback_t *feedback, mleaf_t* viewleaf, bool* sun_v
 		static char const * unknown = "<unknown>";
 		char const * view_material = unknown;
 		char const * view_material_override = unknown;
-		ReadbackBuffer readback;
-		vkpt_readback(&readback);
-		if (readback.material != ~0u)
+		vkpt_readback(&qvk.readback);
+		if (qvk.readback.material != ~0u)
 		{
-			int material_id = readback.material & MATERIAL_INDEX_MASK;
+			int material_id = qvk.readback.material & MATERIAL_INDEX_MASK;
 			feedback->view_material_index = material_id;
 			pbr_material_t const* material = MAT_ForIndex(material_id);
 			if (material)
@@ -2502,7 +2501,7 @@ process_render_feedback(ref_feedback_t *feedback, mleaf_t* viewleaf, bool* sun_v
 		strcpy(feedback->view_material, view_material);
 		strcpy(feedback->view_material_override, view_material_override);
 
-		feedback->lookatcluster = readback.cluster;
+		feedback->lookatcluster = qvk.readback.cluster;
 		feedback->num_light_polys = 0;
 
 		if (vkpt_refdef.bsp_mesh_world_loaded && feedback->lookatcluster >= 0 && feedback->lookatcluster < vkpt_refdef.bsp_mesh_world.num_clusters)
@@ -2511,11 +2510,11 @@ process_render_feedback(ref_feedback_t *feedback, mleaf_t* viewleaf, bool* sun_v
 			feedback->num_light_polys = light_offsets[1] - light_offsets[0];
 		}
 
-		VectorCopy(readback.hdr_color, feedback->hdr_color);
-		feedback->adapted_luminance = readback.adapted_luminance;
+		VectorCopy(qvk.readback.hdr_color, feedback->hdr_color);
+		feedback->adapted_luminance = qvk.readback.adapted_luminance;
 
-		*sun_visible = readback.sun_luminance > 0.f;
-		*adapted_luminance = readback.adapted_luminance;
+		*sun_visible = qvk.readback.sun_luminance > 0.f;
+		*adapted_luminance = qvk.readback.adapted_luminance;
 	}
 }
 

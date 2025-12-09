@@ -299,6 +299,9 @@ typedef struct QVK_s {
 	VkDeviceMemory dump_image_memory;
 	VkDeviceSize dump_image_memory_size;
 #endif
+
+	// Readback from last frame
+	ReadbackBuffer readback;
 } QVK_t;
 
 extern QVK_t qvk;
