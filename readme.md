@@ -1,16 +1,6 @@
 # Quake II RTX
 
-## Project Discontinued
-
-**This repository is no longer maintained.**
-
-If you're looking for a downloadable installer for Quake II RTX, please visit the [Releases](https://github.com/NVIDIA/Q2RTX/releases) page.
-
-If you would like to make some improvements, feel free to fork this repository or look for other community projects based on Quake II RTX.
-
-<br>
-<br>
-<br>
+_Note:_ NVIDIA's original upstream project is now discontinued. The pre-discontinuation README is preserved below, but contains some outdated links.
 
 ## Original README
 
