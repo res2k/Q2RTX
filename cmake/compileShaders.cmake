@@ -1,6 +1,7 @@
 set(SHADER_SOURCE_DEPENDENCIES
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/asvgf.glsl
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/brdf.glsl
+    ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/checkerboard.glsl
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/constants.h
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/fsr_easu.glsl
     ${CMAKE_SOURCE_DIR}/src/refresh/vkpt/shader/fsr_rcas.glsl
