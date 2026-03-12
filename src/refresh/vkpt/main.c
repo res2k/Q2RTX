@@ -73,6 +73,7 @@ cvar_t *cvar_pt_nearest = NULL;
 cvar_t *cvar_pt_bilerp_chars = NULL;
 cvar_t *cvar_pt_bilerp_pics = NULL;
 cvar_t *cvar_pt_waterwarp = NULL;
+cvar_t *cvar_pt_ref_bounce_rays = NULL;
 cvar_t *cvar_drs_enable = NULL;
 cvar_t *cvar_drs_target = NULL;
 cvar_t *cvar_drs_minscale = NULL;
@@ -2559,7 +2560,7 @@ evaluate_reference_mode(reference_mode_t* ref_mode)
 
 		ref_mode->enable_accumulation = true;
 		ref_mode->enable_denoiser = false;
-		ref_mode->num_bounce_rays = 2;
+		ref_mode->num_bounce_rays = max(0, min(2, cvar_pt_ref_bounce_rays->integer));
 		ref_mode->temporal_blend_factor = 1.f / min(max(1, num_accumulated_frames - num_warmup_frames), num_frames_to_accumulate);
 		ref_mode->reflect_refract = max(4, cvar_pt_reflect_refract->integer);
 
@@ -3836,6 +3837,10 @@ R_Init_RTX(bool total)
 
 	// waterwarp effect
 	cvar_pt_waterwarp = Cvar_Get("pt_waterwarp", "0", CVAR_ARCHIVE);
+
+	// bounce rays in reference mode.
+	// useful to eg compare direct lighting only with reference.
+	cvar_pt_ref_bounce_rays = Cvar_Get("pt_ref_bounce_rays", "2", 0);
 
 #ifdef VKPT_DEVICE_GROUPS
 	cvar_sli = Cvar_Get("sli", "1", CVAR_REFRESH | CVAR_ARCHIVE);
