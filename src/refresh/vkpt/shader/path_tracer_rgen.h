@@ -65,9 +65,6 @@ uniform accelerationStructureEXT topLevelAS[TLAS_COUNT];
 #define BOUNCE_RAY_CULL_MASK         (AS_FLAG_OPAQUE | AS_FLAG_SKY | AS_FLAG_CUSTOM_SKY)
 #define SHADOW_RAY_CULL_MASK         (AS_FLAG_OPAQUE)
 
-/* no BRDF sampling in last bounce */
-#define NUM_RNG_PER_FRAME (RNG_NEE_STATIC_DYNAMIC(1) + 1)
-
 #define BOUNCE_SPECULAR 1
 
 #define MAX_OUTPUT_VALUE 1000
