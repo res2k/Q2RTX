@@ -195,6 +195,7 @@ layout(
 	binding = GLOBAL_TEXTURES_TEX_ARR_BINDING_IDX
 ) uniform sampler2D global_texture_descriptors[];
 
+#define SAMPLER_r8ui    usampler2D
 #define SAMPLER_r16ui   usampler2D
 #define SAMPLER_r32ui   usampler2D
 #define SAMPLER_rg32ui  usampler2D
@@ -208,6 +209,7 @@ layout(
 #define SAMPLER_r8      sampler2D
 #define SAMPLER_rg8     sampler2D
 
+#define IMAGE_r8ui    uimage2D
 #define IMAGE_r16ui   uimage2D
 #define IMAGE_r32ui   uimage2D
 #define IMAGE_rg32ui  uimage2D
