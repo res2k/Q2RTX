@@ -3904,7 +3904,10 @@ R_Init_RTX(bool total)
 	cvar_pt_ref_bounce_rays = Cvar_Get("pt_ref_bounce_rays", "2", 0);
 
 	// ReSTIR M clamp value
-	cvar_pt_restir_m_clamp = Cvar_Get("pt_restir_m_clamp", "32", 0);
+	/* Note: Higher values results in pixel having higher correlation between frames;
+	 * however, this can work against the denoiser, as it's temporal filtering would
+	 * really likes pixels that vary over time... */
+	cvar_pt_restir_m_clamp = Cvar_Get("pt_restir_m_clamp", "8", 0);
 
 #ifdef VKPT_DEVICE_GROUPS
 	cvar_sli = Cvar_Get("sli", "1", CVAR_REFRESH | CVAR_ARCHIVE);
