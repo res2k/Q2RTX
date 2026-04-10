@@ -74,6 +74,7 @@ cvar_t *cvar_pt_bilerp_chars = NULL;
 cvar_t *cvar_pt_bilerp_pics = NULL;
 cvar_t *cvar_pt_waterwarp = NULL;
 cvar_t *cvar_pt_ref_bounce_rays = NULL;
+cvar_t *cvar_pt_restir_m_clamp = NULL;
 cvar_t *cvar_drs_enable = NULL;
 cvar_t *cvar_drs_target = NULL;
 cvar_t *cvar_drs_minscale = NULL;
@@ -87,6 +88,7 @@ cvar_t *cvar_ui_hdr_nits = NULL; /* HDR mode UI (stretch pic) brightness in nits
 extern cvar_t *scr_viewsize;
 extern cvar_t *cvar_bloom_enable;
 extern cvar_t* cvar_flt_taa;
+extern cvar_t *cvar_pt_restir;
 static int drs_current_scale = 0;
 static int drs_effective_scale = 0;
 static bool drs_last_frame_world = false;
@@ -2839,6 +2841,14 @@ prepare_ubo(refdef_t *fd, mleaf_t* viewleaf, const reference_mode_t* ref_mode, c
 		qvk.surf_is_hdr ? (cvar_ui_hdr_nits->value * 0.0125) // an scRGB luminance of 1.0 is defined as 80 nits
 						: 1.f /* no change */;
 
+	ubo->restir_m_clamp = cvar_pt_restir_m_clamp->integer;
+	if (cvar_pt_restir->integer == 3)
+	{
+		// adjust clamp for "very cheap" mode
+		ubo->restir_m_clamp /= 2;
+	}
+	ubo->restir_m_clamp = max(ubo->restir_m_clamp, 1); // don't break things
+
 	qvk.extent_render_prev = qvk.extent_render;
 	qvk.gpu_slice_width_prev = qvk.gpu_slice_width;
 
@@ -3892,6 +3902,9 @@ R_Init_RTX(bool total)
 	// bounce rays in reference mode.
 	// useful to eg compare direct lighting only with reference.
 	cvar_pt_ref_bounce_rays = Cvar_Get("pt_ref_bounce_rays", "2", 0);
+
+	// ReSTIR M clamp value
+	cvar_pt_restir_m_clamp = Cvar_Get("pt_restir_m_clamp", "32", 0);
 
 #ifdef VKPT_DEVICE_GROUPS
 	cvar_sli = Cvar_Get("sli", "1", CVAR_REFRESH | CVAR_ARCHIVE);
