@@ -205,7 +205,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 	GLOBAL_UBO_VAR_LIST_DO(vec2,            projection_fov_scale) \
 	GLOBAL_UBO_VAR_LIST_DO(vec2,            projection_fov_scale_prev) \
 	\
-	GLOBAL_UBO_VAR_LIST_DO(vec3,            padding) \
+	GLOBAL_UBO_VAR_LIST_DO(vec2,            padding) \
+	GLOBAL_UBO_VAR_LIST_DO(int,             restir_m_clamp) \
 	GLOBAL_UBO_VAR_LIST_DO(int,             pt_projection) \
 	\
 	GLOBAL_UBO_VAR_LIST_DO(uvec4,           easu_const0) \
