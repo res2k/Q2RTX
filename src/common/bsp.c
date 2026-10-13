@@ -1070,11 +1070,18 @@ static bool BSP_GetPatchedPVSFileName(const char* map_path, char pvs_path[MAX_QP
 	else
 		map_file = map_path;
 
-	memset(pvs_path, 0, MAX_QPATH);
-	strncpy(pvs_path, map_path, map_file - map_path);
-	strcat(pvs_path, "pvs/");
-	strncat(pvs_path, map_file, strlen(map_file) - 4);
-	strcat(pvs_path, ".bin");
+	// Calculate the exact number of characters in map_file (without extension)
+    size_t map_name_len = strlen(map_file) - 4;
+
+    // Construct the string safely using snprintf
+    int written = snprintf(pvs_path, MAX_QPATH, "%.*s/pvs/%.*s.bin", 
+                           (int)(map_file - map_path), map_path, 
+                           (int)map_name_len, map_file);
+
+    // Check whether the string fits in the buffer
+    if (written < 0 || written >= MAX_QPATH) {
+        return false; 
+    }
 
 	return true;
 }

@@ -335,18 +335,26 @@ char *SV_GetSaveInfo(const char *dir)
     year = tm ? tm->tm_year : -1;
 
     // format savegame date
+    // Initialize the date directly with the fallback value
+    strcpy(date, "???");
+
     t = timestamp;
-    len = 0;
-    if ((tm = localtime(&t)) != NULL) {
-        if (tm->tm_year == year)
+    tm = localtime(&t);
+
+    if (tm != NULL) {
+        size_t len = 0;
+
+        if (tm->tm_year == year) {
             len = strftime(date, sizeof(date), "%b %d %H:%M", tm);
-        else
+        } else {
             len = strftime(date, sizeof(date), "%b %d  %Y", tm);
-    } else {
-        len = strftime(date, sizeof(date), "%b %d  %Y", tm);
+        }
+
+        // If strftime fails (because the date buffer is too small), restore the fallback
+        if (len == 0) {
+            strcpy(date, "???");
+        }
     }
-    if (!len)
-        strcpy(date, "???");
 
     return Z_CopyString(va("%s %s", date, name));
 }
