@@ -94,7 +94,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 	UBO_CVAR_DO(pt_particle_softness, 0.7) /* particle softness */ \
 	UBO_CVAR_DO(pt_particle_brightness, 100) /* particle brightness */ \
 	UBO_CVAR_DO(pt_reflect_refract, 2) /* number of reflection or refraction bounces: 0, 1 or 2 */ \
-	UBO_CVAR_DO(pt_restir, 1) /* switch for using RIS or ReSTIR, 0 or 1 */ \
+	UBO_CVAR_DO(pt_restir, 1) /* switch for using RIS (0) or ReSTIR (1 to 3) */ \
 	UBO_CVAR_DO(pt_restir_spatial, 1) /* ReSTIR spatial samples */ \
 	UBO_CVAR_DO(pt_restir_spatial_cap, 1) /* Factor used to cap ReSTIR spatial sample weight */ \
 	UBO_CVAR_DO(pt_roughness_override, -1) /* overrides roughness of all materials if non-negative, [0..1] */ \

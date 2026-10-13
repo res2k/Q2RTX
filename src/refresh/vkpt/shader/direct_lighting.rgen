@@ -61,7 +61,7 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 	// don't compute lighting for invalid surfaces
 	if(material_id == 0)
 	{
-		imageStore(IMG_PT_RESTIR_A, ipos, uvec4(pack_reservoir(r)));
+		imageStore(IMG_PT_RESTIR_A, ipos, uvec4(pack_reservoir(r, false)));
 		return;
 	}
 
@@ -82,6 +82,17 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 
 	bool primary_is_weapon = (material_id & MATERIAL_FLAG_WEAPON) != 0;
 	int primary_medium = int((material_id & MATERIAL_LIGHT_STYLE_MASK) >> MATERIAL_LIGHT_STYLE_SHIFT);
+
+    // Animated (warp) surfaces, and "split" surfaces - where the primary ray hit
+    // water, slime, glass, or a translucent model and reflect_refract.rgen replaced
+    // the G-buffer surface with a reflected/refracted one - have surface data that
+    // changes every frame (animated water normals). Temporal and spatial reuse are
+    // unreliable on those pixels in the cheap modes, where the temporal fetch is
+    // remapped across the reflection/refraction checkerboard.
+    int checkerboard_flags = int(view_direction.w);
+    bool is_warp_surface = (material_id & MATERIAL_FLAG_WARP) != 0;
+    bool is_split_surface = bitCount(checkerboard_flags & CHECKERBOARD_FLAG_FIELD_MASK) > 1;
+    bool is_unstable_surface = global_ubo.pt_restir >= 2 && (is_warp_surface || is_split_surface);
 
 	bool use_shadow_rays = true;
 
@@ -130,7 +141,18 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 		}
 	}
 
-	if (!(pos_prev.x < field_left || pos_prev.x >= field_right || pos_prev.y < 0 || pos_prev.y >= global_ubo.height))
+    // Unstable surfaces get no reuse, so they must always trace their own shadow rays.
+    if(is_unstable_surface)
+        use_shadow_rays = true;
+
+    // Provenance of this pixel's reservoir: 'true' means the selected light's
+    // visibility was actually tested - either by this pixel's own shadow ray, or
+    // carried through a temporal chain of pixels at (approximately) the same
+    // world position. Spatial imports into pixels without shadow rays do NOT
+    // qualify: a neighbor's visibility result does not transfer across a shadow edge.
+    bool r_verified = use_shadow_rays;
+
+	if (!is_unstable_surface && !(pos_prev.x < field_left || pos_prev.x >= field_right || pos_prev.y < 0 || pos_prev.y >= global_ubo.height))
 	{
 		float depth_prev = texelFetch(TEX_PT_VIEW_DEPTH_B, pos_prev, 0).x;
 		float dist_depth = abs(depth_prev - view_depth) / abs(view_depth);
@@ -147,7 +169,7 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 				uvec4 packed_reservoir = texelFetch(TEX_PT_RESTIR_B, pos_prev, 0);
 				unpack_reservoir(packed_reservoir, prev_r);
 				prev_r.y = get_light_current_idx(prev_r.y);
-				if(prev_r.y != RESTIR_INVALID_ID && use_shadow_rays)
+				if(prev_r.y != RESTIR_INVALID_ID)
 				{
 					prev_r.p_hat = get_unshadowed_path_contrib(prev_r.y, position, normal, view_direction.xyz, phong_exp, phong_scale, phong_weight, prev_r.y_pos);
 				}
@@ -155,8 +177,11 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 		}
 	}
 
-	//Sample lights
-	if(use_shadow_rays && !is_gradient)
+    // Did the temporal path produce a usable, verified reservoir?
+    bool temporal_ok = prev_r.y != RESTIR_INVALID_ID && prev_r.W > 0.0 && prev_r.vis_verified;
+
+    //Sample lights
+    if(use_shadow_rays && (!is_gradient || is_unstable_surface))
 	{
 		get_direct_illumination_restir(
 			position,
@@ -174,40 +199,41 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 	{
 		r = prev_r;
 	}
-	else if(prev_r.y != RESTIR_INVALID_ID)
-	{
-		float rng = 0.0;
-		update_reservoir(prev_r.y, prev_r.p_hat * prev_r.W * prev_r.M, prev_r.y_pos, prev_r.M, prev_r.p_hat, rng, r);
+    else if(temporal_ok)
+    {
+        r = prev_r;
+        r_verified = prev_r.vis_verified;
+		r.M = min(r.M, uint(global_ubo.restir_m_clamp));
+		// Reconstruct w_sum so that spatial merges below combine with the
+		// correct temporal weight (W = w_sum / (p_hat * M) must stay calibrated).
+		r.w_sum = r.p_hat * r.W * r.M;
 	}
 
-	//Spatio-temporal
-	if(global_ubo.pt_restir_spatial != 0 && !is_gradient)
-	{
-		// Cross-field sampling logic from asvgf_temporal
+    //Spatio-temporal
+    if(global_ubo.pt_restir_spatial != 0 && !is_gradient && !is_unstable_surface)
+    {
+        // Cross-field sampling logic from asvgf_temporal
 
-		// Find out if this pixel belongs to a checkerboard-split-path surface
-		int checkerboard_flags = int(view_direction.w);
-		bool is_checkerboarded_surface = bitCount(checkerboard_flags & CHECKERBOARD_FLAG_FIELD_MASK) > 1;
-
-		// If it's a regular (non-split) surface and we're running on a single GPU,
-		// we can access both checkerboard fields to get higher sampling quality
-		bool sample_across_fields = !is_checkerboarded_surface && (global_ubo.current_gpu_slice_width == global_ubo.width);
+        // If it's a regular (non-split) surface and we're running on a single GPU,
+        // we can access both checkerboard fields to get higher sampling quality
+        // (is_split_surface is computed near the top of the function)
+        bool sample_across_fields = !is_split_surface && (global_ubo.current_gpu_slice_width == global_ubo.width);
 
 		float rng = get_rng(RNG_RESTIR_SP_LIGHT_SELECTION(0));
-		float min_p_hat = 0.0;//rng * 0.5;
+		float min_p_hat = 0.0;
 		uint processed = 0;
 		ivec2 flat_pos = checker_to_flat(pos_prev_or, global_ubo.prev_width);
 		Reservoir st_r;
 		init_reservoir(spatial_r);
 
 		vec2 rng_pos = vec2(get_rng(RNG_RESTIR_SPATIAL_X(0)), get_rng(RNG_RESTIR_SPATIAL_Y(0)));
-		int distance = use_shadow_rays ? RESTIR_SPACIAL_DISTANCE : 2;
+		int distance = use_shadow_rays ? RESTIR_SPATIAL_DISTANCE : 2;
 		uint sp_samples = uint(global_ubo.pt_restir_spatial);
 
-		//Extra sampling when temporal failed
-		if(prev_r.y == RESTIR_INVALID_ID) sp_samples += 2;
+        //Extra sampling when temporal failed
+        if(!temporal_ok) sp_samples += 2;
 
-		int samples = min(RESTIR_SPACIAL_SAMPLES, int(sp_samples) * 2);
+		int samples = min(RESTIR_SPATIAL_SAMPLES, int(sp_samples) * 2);
 
 		/* Limit influence of spatial samples.
 		 * Two observations:
@@ -275,11 +301,27 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 				}
 			}
 
-			uvec4 packed_reservoir = texelFetch(TEX_PT_RESTIR_B, sample_pos, 0);
-			unpack_reservoir(packed_reservoir, st_r);
-			st_r.y = get_light_current_idx(st_r.y);
+            uvec4 packed_reservoir = texelFetch(TEX_PT_RESTIR_B, sample_pos, 0);
+            unpack_reservoir(packed_reservoir, st_r);
+            st_r.y = get_light_current_idx(st_r.y);
 
-			if(st_r.y == RESTIR_INVALID_ID || st_r.M == 0) continue;
+            if(st_r.y == RESTIR_INVALID_ID || st_r.M == 0 || st_r.W <= 0.0) continue;
+
+            // Skip neighbors whose light is already selected - by this pixel's
+            // own reservoir, or by the spatial accumulator. Merging the same
+            // light again adds almost nothing to W (a same-light merge adds
+            // p_hat * W * M to w_sum AND M to the denominator, which nearly
+            // cancels), but it costs a p_hat evaluation and inflates M - the
+            // darkening bias that spatial_M_cap works around. Under spatial
+            // consensus (which is exactly what pt_restir_spatial 4 creates),
+            // most neighbors select the same light, so most samples skip here.
+            if(st_r.y == r.y || st_r.y == spatial_r.y) continue;
+
+			// Pixels without shadow rays cannot verify imported lights
+			// themselves, so they may only accept reservoirs whose
+			// visibility was actually tested. This prevents light leaks
+			// (e.g. shadows disappearing) in the cheap ReSTIR modes.
+			if(!use_shadow_rays && !st_r.vis_verified) continue;
 
 			float depth_prev = texelFetch(TEX_PT_VIEW_DEPTH_B, sample_pos, 0).x;
 			float dist_depth = abs(depth_prev - view_depth) / abs(view_depth);
@@ -318,13 +360,18 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 
 		}
 
-		if(processed > 0)
-		{
-			//Combine with the other reservoir
-			update_reservoir(spatial_r.y, spatial_r.w_sum, spatial_r.y_pos, spatial_r.M, spatial_r.p_hat, rng, r);
-			r.W = r.w_sum / (r.p_hat * r.M);
-			if(isnan(r.W) || isinf(r.W)) r.W = 0.0;
-		}
+        if(processed > 0)
+        {
+            //Combine with the other reservoir
+            update_reservoir(spatial_r.y, spatial_r.w_sum, spatial_r.y_pos, spatial_r.M, spatial_r.p_hat, rng, r);
+            r.W = r.w_sum / (r.p_hat * r.M);
+            if(isnan(r.W) || isinf(r.W)) r.W = 0.0;
+
+            // Spatial imports are not visibility-tested at this pixel: un-verify
+            // the reservoir for pixels that don't trace shadow rays themselves.
+            if(!use_shadow_rays)
+                r_verified = false;
+        }
 	}
 
 	if(r.y != RESTIR_INVALID_ID)
@@ -419,7 +466,12 @@ direct_lighting_restir(ivec2 ipos, out vec3 high_freq, out vec3 o_specular)
 	high_freq = clamp_output(high_freq);
 	o_specular = clamp_output(o_specular);
 
-	imageStore(IMG_PT_RESTIR_A, ipos, uvec4(pack_reservoir(r)));
+    // Verified means: the shadow ray for the selected light was actually tested,
+    // either by this pixel or by the temporal chain this reservoir came from.
+    // Spatially imported lights are never marked verified, so untested light
+    // cannot spread into other pixels' spatial imports or temporal histories.
+    bool light_verified = r.y != RESTIR_INVALID_ID && r_verified;
+	imageStore(IMG_PT_RESTIR_A, ipos, uvec4(pack_reservoir(r, light_verified)));
 
 }
 
