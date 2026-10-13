@@ -547,7 +547,7 @@ bool vkpt_build_cylinder_light(light_poly_t* light_list, int* num_lights, int ma
 		if (light->cluster >= 0)
 		{
 			hash.mesh = tri;
-			light_entity_ids[(*num_lights)] = *(uint32_t*)&hash;
+			memcpy(&light_entity_ids[(*num_lights)], &hash, sizeof(uint32_t));
 			(*num_lights)++;
 		}
 	}
