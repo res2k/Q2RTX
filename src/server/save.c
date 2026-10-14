@@ -303,7 +303,6 @@ fail:
 char *SV_GetSaveInfo(const char *dir)
 {
     char        name[MAX_OSPATH], date[MAX_QPATH];
-    size_t      len;
     int64_t     timestamp;
     int         autosave, year;
     time_t      t;
