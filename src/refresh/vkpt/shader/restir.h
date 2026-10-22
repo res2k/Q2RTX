@@ -19,14 +19,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-// ========================================================================== //
-// This rgen shader computes direct lighting for the first opaque surface.
-// The parameters of that surface are loaded from the G-buffer, stored there
-// previously by the `primary_rays.rgen` and `reflect_refract.rgen` shaders.
-//
-// See `path_tracer.h` for an overview of the path tracer.
-// ========================================================================== //
-
 #ifndef  _RESTIR_H_
 #define  _RESTIR_H_
 
@@ -34,8 +26,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #define RESTIR_INVALID_ID       0xFFFF
 
-#define RESTIR_SPACIAL_DISTANCE 32
-#define RESTIR_SPACIAL_SAMPLES  8
+#define RESTIR_SPATIAL_DISTANCE 32
+#define RESTIR_SPATIAL_SAMPLES  8
 
 #define RESTIR_SAMPLING_M       4
 
@@ -50,6 +42,7 @@ struct Reservoir
     uint M;      // number of sampled lights so far
     float w_sum; // sum of weights of lights so far
     float p_hat; // importance of selected light
+	bool vis_verified; // whether shadow visibility was actually tested for this
 };
 
 void
@@ -85,27 +78,41 @@ update_reservoir(uint xi, float wi, vec2 xi_pos, uint M, float p_hat, inout floa
 }
 
 uvec4
-pack_reservoir(Reservoir r)
+pack_reservoir(Reservoir r, bool vis_verified)
 {
-	uvec4 vec;
-	r.W = r.y == RESTIR_INVALID_ID ? 0.0 : r.W;
-	vec.x = packHalf2x16(vec2(r.W, r.W));
-	vec.x = (vec.x & 0xFFFF0000) | r.y;
-	vec.y = packHalf2x16(r.y_pos);
-	return vec;
+    uvec4 vec;
+    r.W = r.y == RESTIR_INVALID_ID ? 0.0 : r.W;
+    // Clamp to fp16 max: values above 65504 would become Inf in
+    // packHalf2x16, and the isinf() guards in unpack_reservoir() would
+    // silently drop the light -> black speckles in dim areas.
+    r.W = min(r.W, 65504.0);
+    vec.x = packHalf2x16(vec2(r.W, r.W));
+    vec.x = (vec.x & 0xFFFF0000) | r.y;
+
+    // v2 packing of the second u32:
+    //   bits  0.. 7 : y_pos.x, quantized to [0, 1] in 256 steps
+    //   bits  8..15 : y_pos.y, quantized to [0, 1] in 256 steps
+    //   bit       16 : vis_verified flag (groundwork for shadow reuse)
+    //   bits 17..31 : real M (the actual sample count this reservoir represents)
+    uint pos_qx = uint(clamp(r.y_pos.x, 0.0, 1.0) * 255.0 + 0.5);
+    uint pos_qy = uint(clamp(r.y_pos.y, 0.0, 1.0) * 255.0 + 0.5);
+    uint m = (r.y == RESTIR_INVALID_ID) ? 0u : min(r.M, 32767u);
+    vec.y = pos_qx | (pos_qy << 8) | ((vis_verified ? 1u : 0u) << 16) | (m << 17);
+    return vec;
 }
 
 void
 unpack_reservoir(uvec4 packed, out Reservoir r)
 {
-	vec2 val = unpackHalf2x16(packed.x);
-	r.y = packed.x & 0xFFFF;
-	r.W = val.y;
-	if(isnan(r.W) || isinf(r.W)) r.W = 0.0;
-	r.y_pos = unpackHalf2x16(packed.y);
-	r.p_hat = 0.0;
-	r.M = r.y == RESTIR_INVALID_ID ? 0 : global_ubo.restir_m_clamp;
-	r.w_sum = 0;
+    vec2 val = unpackHalf2x16(packed.x);
+    r.y = packed.x & 0xFFFF;
+    r.W = val.y;
+    if(isnan(r.W) || isinf(r.W)) r.W = 0.0;
+    r.y_pos = vec2(float(packed.y & 0xFFu), float((packed.y >> 8) & 0xFFu)) / 255.0;
+    r.vis_verified = ((packed.y >> 16) & 1u) != 0;
+    r.M = (r.y == RESTIR_INVALID_ID) ? 0u : min(packed.y >> 17, 32767u);
+    r.p_hat = 0.0;
+    r.w_sum = 0;
 }
 
 // Functions
@@ -404,14 +411,18 @@ get_direct_illumination_restir(
 	}
 
 	//Combine with temporal
-	if(prev_r.y != RESTIR_INVALID_ID)
+	// Reservoirs with W == 0 (the light turned out to be shadowed there last
+	// frame) carry no weight; merging them would still add their M to the
+	// denominator of W = w_sum / (p_hat * M) and dim the new estimate.
+	if(prev_r.y != RESTIR_INVALID_ID && prev_r.W > 0.0 && prev_r.vis_verified)
 	{
-		update_reservoir(prev_r.y, prev_r.p_hat * prev_r.W * prev_r.M ,prev_r.y_pos, prev_r.M, prev_r.p_hat, rng, reservoir);
+		// Credit at most restir_m_clamp samples from the previous frame.
+		uint prev_M = min(prev_r.M, uint(global_ubo.restir_m_clamp));
+		update_reservoir(prev_r.y, prev_r.p_hat * prev_r.W * prev_M, prev_r.y_pos, prev_M, prev_r.p_hat, rng, reservoir);
 	}
 
 	reservoir.W = reservoir.w_sum / (reservoir.p_hat * reservoir.M);
 	if(isnan(reservoir.W) || isinf(reservoir.W)) reservoir.W = 0.0;
 }
-
 
 #endif  /*_RESTIR_H_*/
